@@ -1,7 +1,7 @@
 import os
 from steganography import Steganography
 from stegano_edge import SteganographyEdge
-from stegano_edge_clustered import SteganographyEdgeClustered
+from stegano_edge_adaptive import SteganographyEdgeAdaptive
 from edge_detection import EdgeDetection
 from edge_clustering import EdgeClustering
 from evaluation import Evaluation
@@ -305,7 +305,7 @@ def encode_clustered_menu():
     use_noise = (choice == '2')
 
     print("\nMenganalisis edge dan clustering...")
-    success, result = SteganographyEdgeClustered.get_capacity(
+    success, result = SteganographyEdgeAdaptive.get_capacity(
         image_path, threshold, eps, min_samples, use_noise
     )
 
@@ -326,7 +326,7 @@ def encode_clustered_menu():
     output_path = input("Path output: ").strip()
 
     print("\nMemproses...")
-    success, msg = SteganographyEdgeClustered.encode_message(
+    success, msg = SteganographyEdgeAdaptive.encode_message(
         image_path, message, output_path, threshold, eps, min_samples, use_noise
     )
 
@@ -359,7 +359,7 @@ def decode_clustered_menu():
     use_noise = (choice == '2')
 
     print("\nMemproses...")
-    success, message = SteganographyEdgeClustered.decode_message(
+    success, message = SteganographyEdgeAdaptive.decode_message(
         image_path, threshold, eps, min_samples, use_noise
     )
 
@@ -407,7 +407,7 @@ def compare_methods_menu():
     print_success("Encode tanpa clustering berhasil")
 
     print("\n--- Step 2: Encode dengan clustering ---")
-    success2, msg2 = SteganographyEdgeClustered.encode_message(
+    success2, msg2 = SteganographyEdgeAdaptive.encode_message(
         original_image, message, stego_with_cluster, threshold, eps, min_samples, False
     )
     if not success2:
@@ -417,7 +417,7 @@ def compare_methods_menu():
 
     print("\n--- Step 3: Decode kedua hasil ---")
     success3, decoded_no_cluster = SteganographyEdge.decode_message(stego_no_cluster, threshold)
-    success4, decoded_with_cluster = SteganographyEdgeClustered.decode_message(
+    success4, decoded_with_cluster = SteganographyEdgeAdaptive.decode_message(
         stego_with_cluster, threshold, eps, min_samples, False
     )
 
