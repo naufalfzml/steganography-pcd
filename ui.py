@@ -286,8 +286,8 @@ def cluster_visualization_menu():
 
 
 def encode_clustered_menu():
-    """Menu encode dengan clustering"""
-    print("\n--- ENCODE (CLUSTERED EDGE): Sembunyikan Pesan di Clustered Edge ---")
+    """Menu encode dengan clustering (Adaptive)"""
+    print("\n--- ENCODE (ADAPTIVE EDGE): Sembunyikan Pesan di Edge ---")
 
     image_path = input("Path gambar input: ").strip()
     if not os.path.exists(image_path):
@@ -295,44 +295,45 @@ def encode_clustered_menu():
         return
 
     threshold = int(input("Threshold edge detection (default: 50): ").strip() or 50)
-    eps = float(input("DBSCAN eps (default: 3): ").strip() or 3)
-    min_samples = int(input("DBSCAN min_samples (default: 5): ").strip() or 5)
+    eps = float(input("DBSCAN eps (default: 4): ").strip() or 4)
+    min_samples = int(input("DBSCAN min_samples (default: 3): ").strip() or 3)
+    variance_percentile = int(input("Variance Percentile (default: 90, range: 0-100): ").strip() or 90)
 
     print("\n  Pilih tipe edge pixels:")
-    print("  1. Clustered pixels (grouped edges)")
-    print("  2. Noise pixels (isolated edges)")
+    print("  1. Clustered pixels (grouped edges, kapasitas >)")
+    print("  2. Isolated pixels (noise edges, keamanan >)")
     choice = input("  Pilihan (1/2): ").strip()
-    use_noise = (choice == '2')
+    use_isolated = (choice == '2')
 
     print("\nMenganalisis edge dan clustering...")
     success, result = SteganographyEdgeAdaptive.get_capacity(
-        image_path, threshold, eps, min_samples, use_noise
+        image_path, threshold, eps, min_samples, use_isolated, variance_percentile
     )
 
     if success:
-        pixel_type = "noise (isolated)" if use_noise else "clustered (grouped)"
-        print(f"ℹ Edge pixels ({pixel_type}): {result['edge_pixels']} ({result['edge_percentage']:.2f}%)")
-        print(f"ℹ Kapasitas maksimal: {result['max_chars']} karakter")
+        pixel_type = "isolated" if use_isolated else "grouped"
+        print(f"ℹ Edge pixels ({pixel_type}): {result.get('edge_pixels', 'N/A')}")
+        print(f"ℹ Kapasitas maksimal: {result.get('max_chars', 'N/A')} karakter (mode: {result.get('mode', 'N/A')})")
     else:
         print_error(result)
         return
 
     message = input("\nMasukkan pesan: ")
 
-    if len(message) > result['max_chars']:
-        print_error(f"Pesan terlalu panjang! Maksimal {result['max_chars']} karakter.")
+    if len(message) > result.get('max_chars', 0):
+        print_error(f"Pesan terlalu panjang! Maksimal {result.get('max_chars', 0)} karakter.")
         return
 
     output_path = input("Path output: ").strip()
 
     print("\nMemproses...")
     success, msg = SteganographyEdgeAdaptive.encode_message(
-        image_path, message, output_path, threshold, eps, min_samples, use_noise
+        image_path, message, output_path, threshold, eps, min_samples, use_isolated, variance_percentile
     )
 
     if success:
         print_success(msg)
-        print(f"ℹ Parameter: threshold={threshold}, eps={eps}, min_samples={min_samples}, use_noise={use_noise}")
+        print(f"ℹ Parameter: th={threshold}, eps={eps}, ms={min_samples}, iso={use_isolated}, var_p={variance_percentile}")
         print("  INGAT parameter ini untuk decode!")
     else:
         print_error(msg)
@@ -375,13 +376,12 @@ def decode_clustered_menu():
 
 def compare_methods_menu():
     """Menu perbandingan metode"""
-    print("\n--- PERBANDINGAN: Edge Tanpa Clustering vs Dengan Clustering ---")
+    print("\n--- PERBANDINGAN: Edge vs Adaptive Edge ---")
     print("\nProses ini akan:")
-    print("1. Encode pesan dengan edge (no clustering)")
-    print("2. Encode pesan dengan edge (with clustering)")
+    print("1. Encode pesan dengan metode Edge-Based (standar)")
+    print("2. Encode pesan dengan metode Adaptive Edge (clustering + adaptive bit)")
     print("3. Decode kedua hasil")
-    print("4. Hitung PSNR dan BER")
-    print("5. Bandingkan hasil\n")
+    print("4. Hitung PSNR dan BER untuk perbandingan\n")
 
     original_image = input("Path gambar original: ").strip()
     if not os.path.exists(original_image):
@@ -389,94 +389,108 @@ def compare_methods_menu():
         return
 
     message = input("Pesan yang akan di-test: ")
+    
+    print("\nMasukkan parameter untuk kedua metode:")
     threshold = int(input("Threshold (default: 50): ").strip() or 50)
-    eps = float(input("DBSCAN eps (default: 3): ").strip() or 3)
-    min_samples = int(input("DBSCAN min_samples (default: 5): ").strip() or 5)
+    
+    print("\nMasukkan parameter untuk metode Adaptive (jika tidak diisi, akan diskip):")
+    eps_input = input("DBSCAN eps (default: 4): ").strip()
+    min_samples_input = input("DBSCAN min_samples (default: 3): ").strip()
+    variance_percentile_input = input("Variance Percentile (default: 90): ").strip()
+
+    run_adaptive = eps_input and min_samples_input and variance_percentile_input
+
+    eps = float(eps_input or 4)
+    min_samples = int(min_samples_input or 3)
+    variance_percentile = int(variance_percentile_input or 90)
 
     # Temporary files
-    stego_no_cluster = "temp_stego_no_cluster.png"
-    stego_with_cluster = "temp_stego_with_cluster.png"
+    stego_edge = "temp_stego_edge.png"
+    stego_adaptive = "temp_stego_adaptive.png"
 
-    print("\n--- Step 1: Encode tanpa clustering ---")
+    print("\n--- Step 1: Encode metode Edge-Based ---")
     success1, msg1 = SteganographyEdge.encode_message(
-        original_image, message, stego_no_cluster, threshold
+        original_image, message, stego_edge, threshold
     )
     if not success1:
-        print_error(f"Encode no cluster gagal: {msg1}")
+        print_error(f"Encode Edge-Based gagal: {msg1}")
         return
-    print_success("Encode tanpa clustering berhasil")
+    print_success("Encode Edge-Based berhasil")
 
-    print("\n--- Step 2: Encode dengan clustering ---")
-    success2, msg2 = SteganographyEdgeAdaptive.encode_message(
-        original_image, message, stego_with_cluster, threshold, eps, min_samples, False
-    )
-    if not success2:
-        print_error(f"Encode with cluster gagal: {msg2}")
-        return
-    print_success("Encode dengan clustering berhasil")
+    decoded_edge, decoded_adaptive = "", ""
+    if run_adaptive:
+        print("\n--- Step 2: Encode metode Adaptive Edge ---")
+        # Menggunakan clustered pixels (use_isolated=False) untuk perbandingan
+        success2, msg2 = SteganographyEdgeAdaptive.encode_message(
+            original_image, message, stego_adaptive, threshold, eps, min_samples, False, variance_percentile
+        )
+        if not success2:
+            print_error(f"Encode Adaptive Edge gagal: {msg2}")
+        else:
+            print_success("Encode Adaptive Edge berhasil")
 
     print("\n--- Step 3: Decode kedua hasil ---")
-    success3, decoded_no_cluster = SteganographyEdge.decode_message(stego_no_cluster, threshold)
-    success4, decoded_with_cluster = SteganographyEdgeAdaptive.decode_message(
-        stego_with_cluster, threshold, eps, min_samples, False
-    )
-
+    success3, decoded_edge = SteganographyEdge.decode_message(stego_edge, threshold)
     if not success3:
-        print_error(f"Decode no cluster gagal: {decoded_no_cluster}")
+        print_error(f"Decode Edge-Based gagal: {decoded_edge}")
         return
-    if not success4:
-        print_error(f"Decode with cluster gagal: {decoded_with_cluster}")
-        return
-    print_success("Decode kedua metode berhasil")
+    print_success("Decode Edge-Based berhasil.")
+
+    if run_adaptive and os.path.exists(stego_adaptive):
+        success4, decoded_adaptive = SteganographyEdgeAdaptive.decode_message(
+            stego_adaptive, threshold, eps, min_samples, False
+        )
+        if not success4:
+            print_error(f"Decode Adaptive Edge gagal: {decoded_adaptive}")
+        else:
+            print_success("Decode Adaptive Edge berhasil.")
 
     print("\n--- Step 4-5: Evaluasi & Perbandingan ---")
-    success5, result = Evaluation.compare_methods(
-        original_image, message,
-        stego_no_cluster, decoded_no_cluster,
-        stego_with_cluster, decoded_with_cluster
-    )
+    
+    # Evaluasi untuk Edge-Based
+    psnr_edge_s, psnr_edge = Evaluation.calculate_psnr(original_image, stego_edge)
+    ber_edge_s, ber_edge_res = Evaluation.calculate_ber(message, decoded_edge)
 
-    if not success5:
-        print_error(f"Evaluasi gagal: {result}")
-        return
-
-    # Tampilkan hasil
     print("\n" + "="*70)
     print("HASIL PERBANDINGAN METODE")
     print("="*70)
 
-    print("\n1. TANPA CLUSTERING (Edge-Based LSB):")
-    print(f"   PSNR: {result['no_clustering']['psnr']:.2f} dB - {Evaluation.interpret_psnr(result['no_clustering']['psnr'])}")
-    print(f"   BER:  {result['no_clustering']['ber_percentage']:.4f}% - {Evaluation.interpret_ber(result['no_clustering']['ber'])}")
-    print(f"   Accuracy: {result['no_clustering']['accuracy']:.2f}%")
-
-    print("\n2. DENGAN CLUSTERING (DBSCAN + Edge-Based LSB):")
-    print(f"   PSNR: {result['with_clustering']['psnr']:.2f} dB - {Evaluation.interpret_psnr(result['with_clustering']['psnr'])}")
-    print(f"   BER:  {result['with_clustering']['ber_percentage']:.4f}% - {Evaluation.interpret_ber(result['with_clustering']['ber'])}")
-    print(f"   Accuracy: {result['with_clustering']['accuracy']:.2f}%")
-
-    print("\n3. PERBANDINGAN:")
-    print(f"   PSNR: {result['comparison']['psnr_better']} lebih baik ({abs(result['comparison']['psnr_difference']):.2f} dB)")
-    print(f"   BER:  {result['comparison']['ber_better']} lebih baik ({abs(result['comparison']['ber_difference']*100):.4f}%)")
-
-    print("\n4. KESIMPULAN:")
-    if result['with_clustering']['psnr'] > result['no_clustering']['psnr']:
-        print("   ✓ Clustering menghasilkan PSNR lebih tinggi (kualitas gambar lebih baik)")
+    if not (psnr_edge_s and ber_edge_s):
+        print_error("Gagal mengevaluasi metode Edge-Based.")
     else:
-        print("   ✗ Clustering menghasilkan PSNR lebih rendah")
+        print("\n1. EDGE-BASED (Metode Dasar):")
+        print(f"   PSNR: {psnr_edge:.2f} dB - {Evaluation.interpret_psnr(psnr_edge)}")
+        print(f"   BER:  {ber_edge_res['ber_percentage']:.4f}% - {Evaluation.interpret_ber(ber_edge_res['ber'])}")
 
-    if result['with_clustering']['ber'] < result['no_clustering']['ber']:
-        print("   ✓ Clustering menghasilkan BER lebih rendah (decode lebih akurat)")
-    else:
-        print("   ✗ Clustering menghasilkan BER lebih tinggi")
+    # Evaluasi untuk Adaptive
+    if run_adaptive and os.path.exists(stego_adaptive):
+        psnr_adaptive_s, psnr_adaptive = Evaluation.calculate_psnr(original_image, stego_adaptive)
+        ber_adaptive_s, ber_adaptive_res = Evaluation.calculate_ber(message, decoded_adaptive)
+        
+        if not (psnr_adaptive_s and ber_adaptive_s):
+            print_error("Gagal mengevaluasi metode Adaptive Edge.")
+        else:
+            print("\n2. ADAPTIVE EDGE (Clustering + Adaptive Bit):")
+            print(f"   PSNR: {psnr_adaptive:.2f} dB - {Evaluation.interpret_psnr(psnr_adaptive)}")
+            print(f"   BER:  {ber_adaptive_res['ber_percentage']:.4f}% - {Evaluation.interpret_ber(ber_adaptive_res['ber'])}")
 
+            print("\n3. PERBANDINGAN:")
+            psnr_diff = psnr_adaptive - psnr_edge
+            ber_diff = ber_adaptive_res['ber'] - ber_edge_res['ber']
+            
+            psnr_better = "Adaptive" if psnr_diff > 0 else "Edge-Based"
+            ber_better = "Adaptive" if ber_diff < 0 else "Edge-Based"
+
+            print(f"   PSNR: {psnr_better} lebih baik ({abs(psnr_diff):.2f} dB)")
+            print(f"   BER:  {ber_better} lebih baik ({abs(ber_diff*100):.4f}%)")
+    
     print("="*70)
 
     # Cleanup temp files
-    if os.path.exists(stego_no_cluster):
-        os.remove(stego_no_cluster)
-    if os.path.exists(stego_with_cluster):
-        os.remove(stego_with_cluster)
+    if os.path.exists(stego_edge):
+        os.remove(stego_edge)
+    if os.path.exists(stego_adaptive):
+        os.remove(stego_adaptive)
 
 
 def display_menu():
