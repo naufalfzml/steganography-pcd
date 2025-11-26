@@ -121,7 +121,7 @@ def encode_edge_menu():
         return
 
     # Input threshold
-    threshold_input = input("Threshold edge detection (default: 50, range: 0-255): ").strip()
+    threshold_input = input("Threshold edge detection (range: 0-255): ").strip()
     threshold = 50
     if threshold_input:
         try:
@@ -213,7 +213,7 @@ def visualize_edge_menu():
         return
 
     # Input threshold
-    threshold_input = input("Threshold edge detection (default: 50): ").strip()
+    threshold_input = input("Threshold edge detection : ").strip()
     threshold = 50
     if threshold_input:
         try:
@@ -254,9 +254,9 @@ def cluster_visualization_menu():
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    threshold = int(input("Threshold edge detection (default: 50): ").strip() or 50)
-    eps = float(input("DBSCAN eps (default: 3): ").strip() or 3)
-    min_samples = int(input("DBSCAN min_samples (default: 5): ").strip() or 5)
+    threshold = int(input("Threshold edge detection : ").strip() or 50)
+    eps = float(input("DBSCAN eps : ").strip() or 3)
+    min_samples = int(input("DBSCAN min_samples : ").strip() or 5)
     output_path = input("Path output visualisasi: ").strip()
 
     print("\nMemproses clustering...")
@@ -294,10 +294,10 @@ def encode_clustered_menu():
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    threshold = int(input("Threshold edge detection (default: 50): ").strip() or 50)
-    eps = float(input("DBSCAN eps (default: 4): ").strip() or 4)
-    min_samples = int(input("DBSCAN min_samples (default: 3): ").strip() or 3)
-    variance_percentile = int(input("Variance Percentile (default: 90, range: 0-100): ").strip() or 90)
+    threshold = int(input("Threshold edge detection : ").strip() or 50)
+    eps = float(input("DBSCAN eps : ").strip() or 4)
+    min_samples = int(input("DBSCAN min_samples : ").strip() or 3)
+    variance_percentile = int(input("Variance Percentile (range: 0-100): ").strip() or 90)
 
     print("\n  Pilih tipe edge pixels:")
     print("  1. Clustered pixels (grouped edges, kapasitas >)")
@@ -349,9 +349,9 @@ def decode_clustered_menu():
         return
 
     print("\nMasukkan parameter (HARUS SAMA dengan saat encode):")
-    threshold = int(input("Threshold (default: 50): ").strip() or 50)
-    eps = float(input("DBSCAN eps (default: 3): ").strip() or 3)
-    min_samples = int(input("DBSCAN min_samples (default: 5): ").strip() or 5)
+    threshold = int(input("Threshold : ").strip() or 50)
+    eps = float(input("DBSCAN eps : ").strip() or 3)
+    min_samples = int(input("DBSCAN min_samples : ").strip() or 5)
 
     print("\n  Tipe edge pixels saat encode:")
     print("  1. Clustered pixels")
@@ -391,18 +391,18 @@ def compare_methods_menu():
     message = input("Pesan yang akan di-test: ")
     
     print("\nMasukkan parameter untuk kedua metode:")
-    threshold = int(input("Threshold (default: 50): ").strip() or 50)
+    threshold = int(input("Threshold : ").strip() or 50)
     
-    print("\nMasukkan parameter untuk metode Adaptive (jika tidak diisi, akan diskip):")
-    eps_input = input("DBSCAN eps (default: 4): ").strip()
-    min_samples_input = input("DBSCAN min_samples (default: 3): ").strip()
-    variance_percentile_input = input("Variance Percentile (default: 90): ").strip()
-
-    run_adaptive = eps_input and min_samples_input and variance_percentile_input
+    print("\nMasukkan parameter untuk metode Adaptive:")
+    eps_input = input("DBSCAN eps : ").strip()
+    min_samples_input = input("DBSCAN min_samples : ").strip()
+    variance_percentile_input = input("Variance Percentile : ").strip()
 
     eps = float(eps_input or 4)
     min_samples = int(min_samples_input or 3)
     variance_percentile = int(variance_percentile_input or 90)
+
+    run_adaptive = True 
 
     # Temporary files
     stego_edge = "temp_stego_edge.png"

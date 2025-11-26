@@ -16,11 +16,11 @@ def find_optimal_parameters():
 
     # --- Parameter yang akan diuji ---
     # Berdasarkan diskusi, kita persempit rentang yang paling mungkin berhasil
-    thresholds = [30, 40, 50, 60]
-    eps_values = [4, 6, 8]
+    thresholds = [65, 70, 75, 80]
+    eps_values = [2, 4, 6, 8]
     min_samples_values = [3, 4, 5, 10]
     use_isolated_options = [False]  # False = grouped, True = isolated
-    variance_percentiles = [50, 75, 90]
+    variance_percentiles = [75]
 
     print("--- Memulai Pencarian Parameter Optimal untuk Stegano Edge Adaptive ---")
     print(f"Gambar: {IMAGE_PATH}")
