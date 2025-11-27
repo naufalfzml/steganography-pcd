@@ -312,7 +312,8 @@ def encode_clustered_menu():
 
     if success:
         pixel_type = "isolated" if use_isolated else "grouped"
-        print(f"ℹ Edge pixels ({pixel_type}): {result.get('edge_pixels', 'N/A')}")
+        percentage = result.get('edge_percentage', 0)
+        print(f"ℹ Edge pixels ({pixel_type}): {result.get('edge_pixels', 'N/A')} ({percentage:.2f}% dari total)")
         print(f"ℹ Kapasitas maksimal: {result.get('max_chars', 'N/A')} karakter (mode: {result.get('mode', 'N/A')})")
     else:
         print_error(result)
@@ -409,6 +410,11 @@ def compare_methods_menu():
     stego_adaptive = "temp_stego_adaptive.png"
 
     print("\n--- Step 1: Encode metode Edge-Based ---")
+    # Show stats
+    success_cap, cap_res = SteganographyEdge.get_capacity(original_image, threshold)
+    if success_cap:
+         print(f"ℹ Edge Detection: {cap_res['edge_pixels']} pixels ({cap_res['edge_percentage']:.2f}%)")
+
     success1, msg1 = SteganographyEdge.encode_message(
         original_image, message, stego_edge, threshold
     )
@@ -420,6 +426,13 @@ def compare_methods_menu():
     decoded_edge, decoded_adaptive = "", ""
     if run_adaptive:
         print("\n--- Step 2: Encode metode Adaptive Edge ---")
+        # Show stats
+        success_cap2, cap_res2 = SteganographyEdgeAdaptive.get_capacity(
+            original_image, threshold, eps, min_samples, False, variance_percentile
+        )
+        if success_cap2:
+             print(f"ℹ Adaptive Edge: {cap_res2['edge_pixels']} pixels ({cap_res2['edge_percentage']:.2f}%)")
+
         # Menggunakan clustered pixels (use_isolated=False) untuk perbandingan
         success2, msg2 = SteganographyEdgeAdaptive.encode_message(
             original_image, message, stego_adaptive, threshold, eps, min_samples, False, variance_percentile

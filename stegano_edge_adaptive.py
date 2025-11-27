@@ -45,6 +45,12 @@ class SteganographyEdgeAdaptive:
             
             total_pixels = len(edge_coords)
             
+            # Calculate percentage
+            img_temp = Image.open(image_path)
+            w_temp, h_temp = img_temp.size
+            all_pixels = w_temp * h_temp
+            edge_percentage = (total_pixels / all_pixels) * 100
+            
             # Estimasi: Anggap 50% High, 50% Low
             # High Chunk (8 px): 1 flag + 15 bit data = 16 bit terpakai (2 bit/px)
             # Low Chunk (8 px): 1 flag + 7 bit data = 8 bit terpakai (1 bit/px)
@@ -55,6 +61,7 @@ class SteganographyEdgeAdaptive:
             
             return True, {
                 'edge_pixels': total_pixels,
+                'edge_percentage': edge_percentage,
                 'max_chars': max_chars,
                 'mode': 'Adaptive Block Flagging'
             }

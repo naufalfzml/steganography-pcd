@@ -41,9 +41,17 @@ class EdgeClustering:
             if len(edge_coords) == 0:
                 return False, f"Tidak ada edge ditemukan dengan threshold {threshold}"
 
-            # Buka gambar untuk mendapatkan grayscale value
-            img = Image.open(image_path).convert('L')
-            img_array = np.array(img)
+            # Buka gambar untuk mendapatkan grayscale value (ROBUST - MSB ONLY)
+            img = Image.open(image_path)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+                
+            arr_rgb = np.array(img)
+            arr_rgb = arr_rgb & 0xF8 # Mask lowest 3 bits untuk konsistensi
+            img_masked = Image.fromarray(arr_rgb)
+            
+            img_gray = img_masked.convert('L')
+            img_array = np.array(img_gray)
 
             # Tambahkan grayscale value sebagai feature ketiga
             # Format: [[x1, y1, gray1], [x2, y2, gray2], ...]

@@ -66,15 +66,28 @@ class EdgeDetection:
             # Buka gambar
             img = Image.open(image_path)
 
-            # Convert ke grayscale untuk edge detection
-            gray_img = img.convert('L')
+            # --- STABILISASI EDGE DETECTION ---
+            # Konversi ke RGB dan mask lowest 3 bits untuk robustness terhadap LSB modification
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            arr_rgb = np.array(img)
+            arr_rgb = arr_rgb & 0xF8 # Mask 3 bit terbawah (0-7 jadi 0)
+            img_masked = Image.fromarray(arr_rgb)
+            
+            # Convert ke grayscale dari image yang sudah dimask
+            gray_img = img_masked.convert('L')
             img_array = np.array(gray_img)
 
             # Terapkan Sobel
             edge_magnitude = EdgeDetection.apply_sobel(img_array)
 
             # Normalize ke range 0-255
-            edge_magnitude = (edge_magnitude / edge_magnitude.max() * 255).astype(np.uint8)
+            # Handle division by zero just in case
+            m_max = edge_magnitude.max()
+            if m_max == 0: m_max = 1
+            
+            edge_magnitude = (edge_magnitude / m_max * 255).astype(np.uint8)
 
             # Ambil koordinat pixel yang merupakan edge (magnitude > threshold)
             edge_coords = []
@@ -109,15 +122,26 @@ class EdgeDetection:
             # Buka gambar
             img = Image.open(image_path)
 
+            # --- STABILISASI EDGE DETECTION ---
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            arr_rgb = np.array(img)
+            arr_rgb = arr_rgb & 0xF8
+            img_masked = Image.fromarray(arr_rgb)
+            
             # Convert ke grayscale
-            gray_img = img.convert('L')
+            gray_img = img_masked.convert('L')
             img_array = np.array(gray_img)
 
             # Terapkan Sobel
             edge_magnitude = EdgeDetection.apply_sobel(img_array)
 
             # Normalize ke range 0-255
-            edge_magnitude = (edge_magnitude / edge_magnitude.max() * 255).astype(np.uint8)
+            m_max = edge_magnitude.max()
+            if m_max == 0: m_max = 1
+            
+            edge_magnitude = (edge_magnitude / m_max * 255).astype(np.uint8)
 
             # Apply threshold
             edge_binary = np.where(edge_magnitude > threshold, 255, 0).astype(np.uint8)
