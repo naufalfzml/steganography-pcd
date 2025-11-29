@@ -169,4 +169,3 @@ class Evaluation:
             return "Fair (< 10% error)"
         else:
             return "Poor (≥ 10% error)"
-

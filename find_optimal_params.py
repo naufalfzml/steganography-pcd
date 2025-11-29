@@ -16,9 +16,9 @@ def find_optimal_parameters():
 
     # --- Parameter yang akan diuji ---
     # Berdasarkan diskusi, kita persempit rentang yang paling mungkin berhasil
-    thresholds = [65, 70, 75, 80]
-    eps_values = [2, 4, 6, 8]
-    min_samples_values = [3, 4, 5, 10]
+    thresholds = [60]
+    eps_values = [10, 20, 5]
+    min_samples_values = [4]
     use_isolated_options = [False]  # False = grouped, True = isolated
     variance_percentiles = [75]
 

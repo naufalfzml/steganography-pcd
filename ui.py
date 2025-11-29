@@ -1,6 +1,7 @@
 import os
 from steganography import Steganography
 from stegano_edge import SteganographyEdge
+from stegano_edge_clustered import SteganographyEdgeClustered
 from stegano_edge_adaptive import SteganographyEdgeAdaptive
 from edge_detection import EdgeDetection
 from edge_clustering import EdgeClustering
@@ -376,13 +377,14 @@ def decode_clustered_menu():
 
 
 def compare_methods_menu():
-    """Menu perbandingan metode"""
-    print("\n--- PERBANDINGAN: Edge vs Adaptive Edge ---")
+    """Menu perbandingan 3 metode"""
+    print("\n--- PERBANDINGAN: Edge vs Clustered Edge vs Adaptive Edge ---")
     print("\nProses ini akan:")
     print("1. Encode pesan dengan metode Edge-Based (standar)")
-    print("2. Encode pesan dengan metode Adaptive Edge (clustering + adaptive bit)")
-    print("3. Decode kedua hasil")
-    print("4. Hitung PSNR dan BER untuk perbandingan\n")
+    print("2. Encode pesan dengan metode Clustered Edge (Grouped/Isolated)")
+    print("3. Encode pesan dengan metode Adaptive Edge")
+    print("4. Decode ketiga hasil")
+    print("5. Hitung PSNR dan BER untuk perbandingan\n")
 
     original_image = input("Path gambar original: ").strip()
     if not os.path.exists(original_image):
@@ -391,119 +393,90 @@ def compare_methods_menu():
 
     message = input("Pesan yang akan di-test: ")
     
-    print("\nMasukkan parameter untuk kedua metode:")
-    threshold = int(input("Threshold : ").strip() or 50)
+    print("\nMasukkan parameter:")
+    threshold = int(input("Threshold Edge (default 50): ").strip() or 50)
+    eps = float(input("DBSCAN eps (default 4): ").strip() or 4)
+    min_samples = int(input("DBSCAN min_samples (default 3): ").strip() or 3)
+    variance_percentile = int(input("Variance Percentile (Adaptive only, default 90): ").strip() or 90)
     
-    print("\nMasukkan parameter untuk metode Adaptive:")
-    eps_input = input("DBSCAN eps : ").strip()
-    min_samples_input = input("DBSCAN min_samples : ").strip()
-    variance_percentile_input = input("Variance Percentile : ").strip()
-
-    eps = float(eps_input or 4)
-    min_samples = int(min_samples_input or 3)
-    variance_percentile = int(variance_percentile_input or 90)
-
-    run_adaptive = True 
+    print("\nTipe pixel untuk Clustered & Adaptive (jika relevan):")
+    print("1. Grouped/Clustered Pixels (Kapasitas Tinggi)")
+    print("2. Isolated/Noise Pixels (Keamanan Tinggi)")
+    pixel_choice = input("Pilihan (1/2, default 1): ").strip()
+    use_isolated = (pixel_choice == '2')
+    pixel_type_str = "Isolated" if use_isolated else "Grouped"
 
     # Temporary files
     stego_edge = "temp_stego_edge.png"
+    stego_clustered = "temp_stego_clustered.png"
     stego_adaptive = "temp_stego_adaptive.png"
 
-    print("\n--- Step 1: Encode metode Edge-Based ---")
-    # Show stats
-    success_cap, cap_res = SteganographyEdge.get_capacity(original_image, threshold)
-    if success_cap:
-         print(f"ℹ Edge Detection: {cap_res['edge_pixels']} pixels ({cap_res['edge_percentage']:.2f}%)")
-
+    # --- 1. Edge-Based ---
+    print("\n--- 1. Metode Edge-Based ---")
     success1, msg1 = SteganographyEdge.encode_message(
         original_image, message, stego_edge, threshold
     )
-    if not success1:
-        print_error(f"Encode Edge-Based gagal: {msg1}")
-        return
-    print_success("Encode Edge-Based berhasil")
+    if success1: print_success("Encode Edge-Based berhasil")
+    else: print_error(f"Encode Edge-Based gagal: {msg1}")
 
-    decoded_edge, decoded_adaptive = "", ""
-    if run_adaptive:
-        print("\n--- Step 2: Encode metode Adaptive Edge ---")
-        # Show stats
-        success_cap2, cap_res2 = SteganographyEdgeAdaptive.get_capacity(
-            original_image, threshold, eps, min_samples, False, variance_percentile
-        )
-        if success_cap2:
-             print(f"ℹ Adaptive Edge: {cap_res2['edge_pixels']} pixels ({cap_res2['edge_percentage']:.2f}%)")
+    # --- 2. Clustered Edge ---
+    print(f"\n--- 2. Metode Clustered Edge ({pixel_type_str}) ---")
+    success2, msg2 = SteganographyEdgeClustered.encode_message(
+        original_image, message, stego_clustered, threshold, eps, min_samples, use_isolated
+    )
+    if success2: print_success("Encode Clustered Edge berhasil")
+    else: print_error(f"Encode Clustered Edge gagal: {msg2}")
 
-        # Menggunakan clustered pixels (use_isolated=False) untuk perbandingan
-        success2, msg2 = SteganographyEdgeAdaptive.encode_message(
-            original_image, message, stego_adaptive, threshold, eps, min_samples, False, variance_percentile
-        )
-        if not success2:
-            print_error(f"Encode Adaptive Edge gagal: {msg2}")
-        else:
-            print_success("Encode Adaptive Edge berhasil")
+    # --- 3. Adaptive Edge ---
+    print(f"\n--- 3. Metode Adaptive Edge ({pixel_type_str}) ---")
+    success3, msg3 = SteganographyEdgeAdaptive.encode_message(
+        original_image, message, stego_adaptive, threshold, eps, min_samples, use_isolated, variance_percentile
+    )
+    if success3: print_success("Encode Adaptive Edge berhasil")
+    else: print_error(f"Encode Adaptive Edge gagal: {msg3}")
 
-    print("\n--- Step 3: Decode kedua hasil ---")
-    success3, decoded_edge = SteganographyEdge.decode_message(stego_edge, threshold)
-    if not success3:
-        print_error(f"Decode Edge-Based gagal: {decoded_edge}")
-        return
-    print_success("Decode Edge-Based berhasil.")
+    # --- Evaluasi ---
+    print("\n--- Evaluasi & Hasil ---")
+    print(f"{'METODE':<20} | {'PSNR (dB)':<15} | {'BER (%)':<15} | {'KAPASITAS (est)':<15}")
+    print("-" * 75)
 
-    if run_adaptive and os.path.exists(stego_adaptive):
-        success4, decoded_adaptive = SteganographyEdgeAdaptive.decode_message(
-            stego_adaptive, threshold, eps, min_samples, False
-        )
-        if not success4:
-            print_error(f"Decode Adaptive Edge gagal: {decoded_adaptive}")
-        else:
-            print_success("Decode Adaptive Edge berhasil.")
-
-    print("\n--- Step 4-5: Evaluasi & Perbandingan ---")
-    
-    # Evaluasi untuk Edge-Based
-    psnr_edge_s, psnr_edge = Evaluation.calculate_psnr(original_image, stego_edge)
-    ber_edge_s, ber_edge_res = Evaluation.calculate_ber(message, decoded_edge)
-
-    print("\n" + "="*70)
-    print("HASIL PERBANDINGAN METODE")
-    print("="*70)
-
-    if not (psnr_edge_s and ber_edge_s):
-        print_error("Gagal mengevaluasi metode Edge-Based.")
+    # Eval Edge
+    if success1 and os.path.exists(stego_edge):
+        s_dec, decoded = SteganographyEdge.decode_message(stego_edge, threshold)
+        psnr = Evaluation.calculate_psnr(original_image, stego_edge)[1]
+        ber = Evaluation.calculate_ber(message, decoded)[1]['ber_percentage']
+        # Estimate capacity
+        _, cap = SteganographyEdge.get_capacity(original_image, threshold)
+        cap_val = cap.get('max_chars', 0)
+        print(f"{'Edge-Based':<20} | {psnr:<15.2f} | {ber:<15.4f} | {cap_val:<15}")
     else:
-        print("\n1. EDGE-BASED (Metode Dasar):")
-        print(f"   PSNR: {psnr_edge:.2f} dB - {Evaluation.interpret_psnr(psnr_edge)}")
-        print(f"   BER:  {ber_edge_res['ber_percentage']:.4f}% - {Evaluation.interpret_ber(ber_edge_res['ber'])}")
+        print(f"{'Edge-Based':<20} | {'Gagal':<15} | {'Gagal':<15} | {'-':<15}")
 
-    # Evaluasi untuk Adaptive
-    if run_adaptive and os.path.exists(stego_adaptive):
-        psnr_adaptive_s, psnr_adaptive = Evaluation.calculate_psnr(original_image, stego_adaptive)
-        ber_adaptive_s, ber_adaptive_res = Evaluation.calculate_ber(message, decoded_adaptive)
-        
-        if not (psnr_adaptive_s and ber_adaptive_s):
-            print_error("Gagal mengevaluasi metode Adaptive Edge.")
-        else:
-            print("\n2. ADAPTIVE EDGE (Clustering + Adaptive Bit):")
-            print(f"   PSNR: {psnr_adaptive:.2f} dB - {Evaluation.interpret_psnr(psnr_adaptive)}")
-            print(f"   BER:  {ber_adaptive_res['ber_percentage']:.4f}% - {Evaluation.interpret_ber(ber_adaptive_res['ber'])}")
+    # Eval Clustered
+    if success2 and os.path.exists(stego_clustered):
+        s_dec, decoded = SteganographyEdgeClustered.decode_message(stego_clustered, threshold, eps, min_samples, use_isolated)
+        psnr = Evaluation.calculate_psnr(original_image, stego_clustered)[1]
+        ber = Evaluation.calculate_ber(message, decoded)[1]['ber_percentage']
+        _, cap = SteganographyEdgeClustered.get_capacity(original_image, threshold, eps, min_samples, use_isolated)
+        cap_val = cap.get('max_chars', 0)
+        print(f"{'Clustered Edge':<20} | {psnr:<15.2f} | {ber:<15.4f} | {cap_val:<15}")
+    else:
+        print(f"{'Clustered Edge':<20} | {'Gagal':<15} | {'Gagal':<15} | {'-':<15}")
 
-            print("\n3. PERBANDINGAN:")
-            psnr_diff = psnr_adaptive - psnr_edge
-            ber_diff = ber_adaptive_res['ber'] - ber_edge_res['ber']
-            
-            psnr_better = "Adaptive" if psnr_diff > 0 else "Edge-Based"
-            ber_better = "Adaptive" if ber_diff < 0 else "Edge-Based"
+    # Eval Adaptive
+    if success3 and os.path.exists(stego_adaptive):
+        s_dec, decoded = SteganographyEdgeAdaptive.decode_message(stego_adaptive, threshold, eps, min_samples, use_isolated)
+        psnr = Evaluation.calculate_psnr(original_image, stego_adaptive)[1]
+        ber = Evaluation.calculate_ber(message, decoded)[1]['ber_percentage']
+        _, cap = SteganographyEdgeAdaptive.get_capacity(original_image, threshold, eps, min_samples, use_isolated, variance_percentile)
+        cap_val = cap.get('max_chars', 0)
+        print(f"{'Adaptive Edge':<20} | {psnr:<15.2f} | {ber:<15.4f} | {cap_val:<15}")
+    else:
+        print(f"{'Adaptive Edge':<20} | {'Gagal':<15} | {'Gagal':<15} | {'-':<15}")
 
-            print(f"   PSNR: {psnr_better} lebih baik ({abs(psnr_diff):.2f} dB)")
-            print(f"   BER:  {ber_better} lebih baik ({abs(ber_diff*100):.4f}%)")
-    
-    print("="*70)
-
-    # Cleanup temp files
-    if os.path.exists(stego_edge):
-        os.remove(stego_edge)
-    if os.path.exists(stego_adaptive):
-        os.remove(stego_adaptive)
+    # Cleanup
+    for f in [stego_edge, stego_clustered, stego_adaptive]:
+        if os.path.exists(f): os.remove(f)
 
 
 def display_menu():
@@ -522,7 +495,7 @@ def display_menu():
     print("8. Encode dengan clustered edge")
     print("9. Decode dengan clustered edge")
     print("\nD. Evaluasi & Perbandingan:")
-    print("10. Perbandingan metode (PSNR & BER)")
+    print("10. Perbandingan 3 metode (Edge, Clustered, Adaptive)")
     print("\n11. Keluar")
     print("-"*50)
 
