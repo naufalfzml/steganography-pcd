@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 import math
+import random
 
 
 class Evaluation:
@@ -169,3 +170,70 @@ class Evaluation:
             return "Fair (< 10% error)"
         else:
             return "Poor (≥ 10% error)"
+
+    @staticmethod
+    def add_salt_and_pepper_noise(image_path, output_path, amount=0.01, random_seed=None):
+        """
+        Menambahkan Salt and Pepper noise ke gambar (PER-PIXEL, REALISTIS)
+        
+        Args:
+            image_path: Path gambar input
+            output_path: Path gambar output
+            amount: Persentase noise (0.0 - 1.0), default 0.01 (1%)
+                   Ini adalah probabilitas per-pixel
+        
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            if random_seed is not None:
+                random.seed(random_seed)
+                np.random.seed(random_seed)
+            # Buka gambar
+            image = Image.open(image_path).convert('RGB')
+            img_array = np.array(image)
+            
+            # Copy array untuk dimodifikasi
+            noisy_img = np.copy(img_array)
+            
+            # Threshold untuk salt (white) dan pepper (black)
+            # amount/2 untuk salt, amount/2 untuk pepper
+            prob_pepper = amount / 2  # Probabilitas pixel jadi hitam
+            prob_salt = amount / 2     # Probabilitas pixel jadi putih
+            thres_pepper = prob_pepper
+            thres_salt = 1 - prob_salt
+            
+            # Iterasi per pixel (HEIGHT x WIDTH)
+            # Semua channel RGB berubah bersamaan (per-pixel, bukan per-channel)
+            height, width = img_array.shape[:2]
+            
+            for i in range(height):
+                for j in range(width):
+                    rdn = random.random()
+                    
+                    if rdn < thres_pepper:
+                        # Pepper: Pixel jadi hitam (semua channel = 0)
+                        noisy_img[i, j] = [0, 0, 0]
+                    elif rdn > thres_salt:
+                        # Salt: Pixel jadi putih (semua channel = 255)
+                        noisy_img[i, j] = [255, 255, 255]
+                    # else: tetap original (tidak diubah)
+            
+            # Simpan gambar
+            Image.fromarray(noisy_img.astype('uint8')).save(output_path)
+            
+            # Hitung statistik noise yang ditambahkan
+            total_pixels = height * width
+            pepper_count = np.sum(np.all(noisy_img == [0, 0, 0], axis=2))
+            salt_count = np.sum(np.all(noisy_img == [255, 255, 255], axis=2))
+            actual_noise_pct = (pepper_count + salt_count) / total_pixels * 100
+            
+            return True, (f"Berhasil menambahkan noise | "
+                         f"Salt: {salt_count} pixels, "
+                         f"Pepper: {pepper_count} pixels "
+                         f"({actual_noise_pct:.2f}% dari total)")
+            
+        except FileNotFoundError:
+            return False, f"File '{image_path}' tidak ditemukan"
+        except Exception as e:
+            return False, f"Gagal menambahkan noise: {str(e)}"

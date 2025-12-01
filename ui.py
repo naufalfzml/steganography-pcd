@@ -479,6 +479,147 @@ def compare_methods_menu():
         if os.path.exists(f): os.remove(f)
 
 
+def robustness_test_menu():
+    """Menu pengujian robustness dengan Salt & Pepper Noise"""
+    print("\n--- PENGUJIAN ROBUSTNESS (Salt & Pepper Noise) ---")
+    print("Pengujian ketahanan pesan terhadap noise")
+
+    image_path = input("Path gambar original: ").strip()
+    if not os.path.exists(image_path):
+        print_error(f"File tidak ditemukan!")
+        return
+
+    message = input("Pesan yang akan di-test: ")
+    
+    # ✅ TAMBAHAN: Input noise level
+    noise_input = input("Noise level (0.0-1.0, default 0.01 untuk 1%): ").strip()
+    noise_level = 0.01
+    if noise_input:
+        try:
+            noise_level = float(noise_input)
+            if noise_level < 0 or noise_level > 1:
+                print_error("Noise level harus antara 0.0 dan 1.0. Menggunakan default: 0.01")
+                noise_level = 0.01
+        except ValueError:
+            print_error("Input tidak valid. Menggunakan default: 0.01")
+    
+    print(f"\nℹ Noise level: {noise_level*100:.1f}%")
+    
+    print("\nPilih Algoritma:")
+    print("1. Edge-Based (Standard)")
+    print("2. Clustered Edge")
+    print("3. Adaptive Edge")
+    
+    algo_choice = input("Pilihan (1-3): ").strip()
+    
+    threshold = int(input("Threshold Edge (default 50): ").strip() or 50)
+    
+    eps = 4
+    min_samples = 3
+    variance_percentile = 90
+    use_isolated = False
+    
+    if algo_choice in ['2', '3']:
+        eps = float(input("DBSCAN eps (default 4): ").strip() or 4)
+        min_samples = int(input("DBSCAN min_samples (default 3): ").strip() or 3)
+        
+        print("\nTipe pixel:")
+        print("1. Grouped/Clustered Pixels")
+        print("2. Isolated/Noise Pixels")
+        if input("Pilihan (1/2, default 1): ").strip() == '2':
+            use_isolated = True
+            
+    if algo_choice == '3':
+        variance_percentile = int(input("Variance Percentile (default 90): ").strip() or 90)
+
+    # Temp files
+    stego_path = "temp_robust_stego.png"
+    noisy_path = "temp_robust_noisy.png"
+    
+    try:
+        # 1. Encode
+        print("\n1. Encoding pesan...")
+        success_enc = False
+        msg_enc = ""
+        
+        if algo_choice == '1':
+            success_enc, msg_enc = SteganographyEdge.encode_message(
+                image_path, message, stego_path, threshold
+            )
+        elif algo_choice == '2':
+            success_enc, msg_enc = SteganographyEdgeClustered.encode_message(
+                image_path, message, stego_path, threshold, eps, min_samples, use_isolated
+            )
+        elif algo_choice == '3':
+            success_enc, msg_enc = SteganographyEdgeAdaptive.encode_message(
+                image_path, message, stego_path, threshold, eps, min_samples, use_isolated, variance_percentile
+            )
+        else:
+            print_error("Pilihan algoritma tidak valid")
+            return
+
+        if not success_enc:
+            print_error(f"Encode gagal: {msg_enc}")
+            return
+        print_success("Encode berhasil")
+
+        # 2. Add Noise (SEKARANG LEBIH REALISTIS!)
+        print(f"\n2. Menambahkan Salt & Pepper Noise ({noise_level*100:.1f}%)...")
+        success_noise, msg_noise = Evaluation.add_salt_and_pepper_noise(
+            stego_path, noisy_path, noise_level, random_seed=42
+        )
+        if not success_noise:
+            print_error(f"Gagal menambah noise: {msg_noise}")
+            return
+        print_success(msg_noise)  # ← Tampilkan detail statistik noise
+
+        # 3. Decode
+        print("\n3. Decoding pesan dari gambar bernoise...")
+        success_dec = False
+        decoded_message = ""
+        
+        if algo_choice == '1':
+            success_dec, decoded_message = SteganographyEdge.decode_message(noisy_path, threshold)
+        elif algo_choice == '2':
+            success_dec, decoded_message = SteganographyEdgeClustered.decode_message(
+                noisy_path, threshold, eps, min_samples, use_isolated
+            )
+        elif algo_choice == '3':
+            success_dec, decoded_message = SteganographyEdgeAdaptive.decode_message(
+                noisy_path, threshold, eps, min_samples, use_isolated
+            )
+
+        # 4. Result
+        print("\n" + "="*60)
+        print("HASIL PENGUJIAN ROBUSTNESS")
+        print("-"*60)
+        print(f"Algoritma       : {['Standard Edge', 'Clustered Edge', 'Adaptive Edge'][int(algo_choice)-1]}")
+        print(f"Noise Level     : {noise_level*100:.1f}%")
+        print(f"Pesan Asli      : {message[:50]}{'...' if len(message) > 50 else ''}")
+        
+        if success_dec:
+            print(f"Pesan Decode    : {decoded_message[:50]}{'...' if len(decoded_message) > 50 else ''}")
+            success_ber, ber_res = Evaluation.calculate_ber(message, decoded_message)
+            if success_ber:
+                print(f"\nMetrik:")
+                print(f"  BER           : {ber_res['ber_percentage']:.4f}%")
+                print(f"  Akurasi       : {ber_res['accuracy']:.4f}%")
+                print(f"  Error Bits    : {ber_res['error_bits']} / {ber_res['total_bits']}")
+                print(f"  Status        : {Evaluation.interpret_ber(ber_res['ber'])}")
+            else:
+                print("Gagal menghitung BER")
+        else:
+            print(f"Pesan Decode    : [GAGAL] {decoded_message}")
+            print("\n⚠ Decode gagal! Pesan tidak dapat di-extract dari gambar bernoise.")
+            
+        print("="*60)
+
+    finally:
+        # Cleanup
+        if os.path.exists(stego_path): os.remove(stego_path)
+        if os.path.exists(noisy_path): os.remove(noisy_path)
+
+
 def display_menu():
     """Menampilkan menu utama"""
     print("\n=== METODE STEGANOGRAPHY ===")
@@ -496,7 +637,8 @@ def display_menu():
     print("9. Decode dengan clustered edge")
     print("\nD. Evaluasi & Perbandingan:")
     print("10. Perbandingan 3 metode (Edge, Clustered, Adaptive)")
-    print("\n11. Keluar")
+    print("11. Pengujian Robustness (Salt & Pepper 1%)")
+    print("\n12. Keluar")
     print("-"*50)
 
 
@@ -506,7 +648,7 @@ def run():
         print_header()
         display_menu()
 
-        choice = input("Pilih menu (1-11): ").strip()
+        choice = input("Pilih menu (1-12): ").strip()
 
         if choice == '1':
             encode_menu()
@@ -529,9 +671,11 @@ def run():
         elif choice == '10':
             compare_methods_menu()
         elif choice == '11':
+            robustness_test_menu()
+        elif choice == '12':
             print("\nTerima kasih telah menggunakan program ini!")
             break
         else:
-            print_error("Pilihan tidak valid! Silakan pilih 1-11.")
+            print_error("Pilihan tidak valid! Silakan pilih 1-12.")
 
         input("\nTekan Enter untuk melanjutkan...")

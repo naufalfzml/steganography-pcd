@@ -29,6 +29,9 @@ ADP_EPS = 0.15                 # Jarak maksimum antar sampel
 ADP_MIN_SAMPLES = 4         # Jumlah sampel minimum per cluster
 ADP_USE_ISOLATED = False    # True: Isolated Pixels, False: Grouped Pixels
 ADP_VAR_PERCENTILE = 75     # Persentil varians untuk threshold adaptif
+RANDOM_SEED = 42
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
 
 # =============================================================================
 # BAGIAN 1: KELAS ALGORITMA (WRAPPER)
@@ -171,7 +174,7 @@ class AdaptiveEdgeStego:
 class Utils:
     @staticmethod
     def generate_random_string(length):
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+        return 'a' * length
 
     @staticmethod
     def str_to_bin(message):
@@ -204,19 +207,40 @@ class Utils:
         return min(ber, 100.0)
 
     @staticmethod
+    # automated_test.py - class Utils  
     def add_salt_pepper_noise(image, prob):
-        output = np.zeros(image.shape, np.uint8)
-        thres = 1 - prob
-        for i in range(image.shape[0]):
-            for j in range(image.shape[1]):
-                rdn = random.random()
-                if rdn < prob:
-                    output[i][j] = 0
-                elif rdn > thres:
-                    output[i][j] = 255
-                else:
-                    output[i][j] = image[i][j]
-        return output
+            """
+            Add salt & pepper noise (FIXED: Total noise = prob, not 2*prob)
+            
+            Args:
+                image: Input image (numpy array)
+                prob: Total noise probability (0.0-1.0)
+                    Split 50-50 between salt and pepper
+            
+            Returns:
+                Noisy image (numpy array)
+            """
+            output = np.copy(image)  # ← Gunakan copy, bukan zeros
+            
+            # Split noise probability
+            prob_pepper = prob / 2  # Half for pepper (black)
+            prob_salt = prob / 2    # Half for salt (white)
+            thres_salt = 1 - prob_salt
+            
+            for i in range(image.shape[0]):
+                for j in range(image.shape[1]):
+                    rdn = random.random()
+                    
+                    if rdn < prob_pepper:
+                        # Pepper (black)
+                        output[i][j] = [0, 0, 0]
+                    elif rdn > thres_salt:
+                        # Salt (white)
+                        output[i][j] = [255, 255, 255]
+                    # else: keep original (no change needed since we use copy)
+            
+            return output
+
 
     @staticmethod
     def apply_jpeg_compression(image, quality):
@@ -224,6 +248,161 @@ class Utils:
         result, encimg = cv2.imencode('.jpg', image, encode_param)
         decimg = cv2.imdecode(encimg, 1)
         return decimg
+
+    @staticmethod
+    def add_gaussian_noise(image, mean=0, sigma=25):
+        """
+        Add Gaussian (Normal Distribution) noise
+        Common in electronic circuit noise and thermal noise
+        
+        Args:
+            image: Input image
+            mean: Mean of Gaussian distribution (default: 0)
+            sigma: Standard deviation (default: 25, range: 10-50 typical)
+        
+        Returns:
+            Noisy image
+        """
+        output = np.copy(image).astype(np.float64)
+        
+        # Generate Gaussian noise
+        gaussian = np.random.normal(mean, sigma, image.shape)
+        
+        # Add noise
+        output = output + gaussian
+        
+        # Clip to valid range [0, 255]
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        return output
+    
+    
+    @staticmethod
+    def add_rayleigh_noise(image, scale=25):
+        """
+        Add Rayleigh noise
+        Common in ultrasound imaging and radar systems
+        Models magnitude of noise with Gaussian components
+        
+        Args:
+            image: Input image
+            scale: Scale parameter (sigma), controls noise intensity
+                  Typical range: 10-50
+        
+        Returns:
+            Noisy image
+        """
+        output = np.copy(image).astype(np.float64)
+        
+        # Generate Rayleigh noise
+        # Rayleigh distribution with scale parameter
+        rayleigh = np.random.rayleigh(scale, image.shape)
+        
+        # Subtract mean to center noise around 0
+        rayleigh = rayleigh - np.mean(rayleigh)
+        
+        # Add noise
+        output = output + rayleigh
+        
+        # Clip to valid range [0, 255]
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        return output
+    
+    
+    @staticmethod
+    def add_erlang_noise(image, shape=2, scale=15):
+        """
+        Add Erlang (Gamma) noise
+        Special case of Gamma distribution (shape = integer)
+        Models sum of exponential random variables
+        Common in queueing theory and telecommunications
+        
+        Args:
+            image: Input image
+            shape: Shape parameter k (integer, default: 2)
+                  Higher k = more Gaussian-like
+            scale: Scale parameter (default: 15)
+                  Controls noise intensity
+        
+        Returns:
+            Noisy image
+        """
+        output = np.copy(image).astype(np.float64)
+        
+        # Generate Erlang (Gamma) noise
+        # Erlang is Gamma with integer shape parameter
+        erlang = np.random.gamma(shape, scale, image.shape)
+        
+        # Center noise around 0
+        erlang = erlang - np.mean(erlang)
+        
+        # Add noise
+        output = output + erlang
+        
+        # Clip to valid range [0, 255]
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        return output
+    
+    
+    @staticmethod
+    def add_uniform_noise(image, low=-50, high=50):
+        """
+        Add Uniform noise
+        All values in range [low, high] have equal probability
+        Models quantization noise and digital round-off errors
+        
+        Args:
+            image: Input image
+            low: Lower bound of noise (default: -50)
+            high: Upper bound of noise (default: 50)
+        
+        Returns:
+            Noisy image
+        """
+        output = np.copy(image).astype(np.float64)
+        
+        # Generate Uniform noise
+        uniform = np.random.uniform(low, high, image.shape)
+        
+        # Add noise
+        output = output + uniform
+        
+        # Clip to valid range [0, 255]
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        return output
+    
+    
+    @staticmethod
+    def add_exponential_noise(image, scale=30):
+        """
+        Add Exponential noise (BONUS)
+        Models time between events in Poisson process
+        
+        Args:
+            image: Input image
+            scale: Scale parameter (1/lambda), controls noise intensity
+        
+        Returns:
+            Noisy image
+        """
+        output = np.copy(image).astype(np.float64)
+        
+        # Generate Exponential noise
+        exponential = np.random.exponential(scale, image.shape)
+        
+        # Center around 0
+        exponential = exponential - np.mean(exponential)
+        
+        # Add noise
+        output = output + exponential
+        
+        # Clip to valid range [0, 255]
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        return output
 
 
 # =============================================================================
@@ -302,8 +481,10 @@ class StegoAutomatedTester:
             })
             print(f"   Progress: {pct}% Payload | Std PSNR: {p_s:.2f} | Clu PSNR: {p_c:.2f} | Adp PSNR: {p_a:.2f}")
 
+    # automated_test.py - class StegoAutomatedTester
+
     def run_robustness_test(self):
-        print("\n[2/3] Menjalankan Robustness Test (Noise & Compression)...")
+        print("\n[2/3] Menjalankan Robustness Test (Noise Distributions & Attacks)...")
         
         # Fix payload 50%
         max_cap = self.algo_standard.get_capacity(self.original_image)
@@ -314,46 +495,80 @@ class StegoAutomatedTester:
         _, stego_clu = self.algo_clustered.embed(self.original_image, message)
         _, stego_adp = self.algo_adaptive.embed(self.original_image, message)
         
+        # ✅ COMPREHENSIVE ATTACK SUITE
         attacks = [
+            # Baseline
             ("No Attack", lambda x: x),
-            ("Salt&Pepper (0.01)", lambda x: Utils.add_salt_pepper_noise(x, 0.01)),
+            
+            # === NOISE DISTRIBUTIONS (Statistical) ===
+            ("Gaussian (σ=15)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=15)),
+            ("Gaussian (σ=25)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=25)),
+            ("Gaussian (σ=35)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=35)),
+            
+            ("Rayleigh (scale=15)", lambda x: Utils.add_rayleigh_noise(x, scale=15)),
+            ("Rayleigh (scale=25)", lambda x: Utils.add_rayleigh_noise(x, scale=25)),
+            
+            ("Erlang (k=2,s=15)", lambda x: Utils.add_erlang_noise(x, shape=2, scale=15)),
+            ("Erlang (k=3,s=15)", lambda x: Utils.add_erlang_noise(x, shape=3, scale=15)),
+            
+            ("Uniform (-30,+30)", lambda x: Utils.add_uniform_noise(x, low=-30, high=30)),
+            ("Uniform (-50,+50)", lambda x: Utils.add_uniform_noise(x, low=-50, high=50)),
+            
+            ("Exponential (s=25)", lambda x: Utils.add_exponential_noise(x, scale=25)),
+            
+            # === IMPULSE NOISE ===
+            ("Salt&Pepper (0.5%)", lambda x: Utils.add_salt_pepper_noise(x, 0.005)),
+            ("Salt&Pepper (1.0%)", lambda x: Utils.add_salt_pepper_noise(x, 0.01)),
+            ("Salt&Pepper (2.0%)", lambda x: Utils.add_salt_pepper_noise(x, 0.02)),
+        
+            
+            # === COMPRESSION ATTACKS ===
             ("JPEG (Q=90)", lambda x: Utils.apply_jpeg_compression(x, 90)),
-            ("JPEG (Q=70)", lambda x: Utils.apply_jpeg_compression(x, 70))
+            ("JPEG (Q=70)", lambda x: Utils.apply_jpeg_compression(x, 70)),
+            ("JPEG (Q=50)", lambda x: Utils.apply_jpeg_compression(x, 50)),
         ]
+        
+        print(f"\n{'Attack Type':<30} | {'Std BER':<10} | {'Clu BER':<10} | {'Adp BER':<10} | {'Winner':<10}")
+        print("-" * 85)
         
         for attack_name, attack_func in attacks:
             # Attack Standard
-            att_std = attack_func(stego_std)
-            # Real Extract Attempt
+            att_std = attack_func(np.copy(stego_std))
             try:
                 ext_std = self.algo_standard.extract(att_std)
                 ber_std = Utils.calculate_ber(message, ext_std)
             except:
-                ber_std = 100.0 # Fail
+                ber_std = 100.0
 
             # Attack Clustered
-            att_clu = attack_func(stego_clu)
+            att_clu = attack_func(np.copy(stego_clu))
             try:
                 ext_clu = self.algo_clustered.extract(att_clu)
                 ber_clu = Utils.calculate_ber(message, ext_clu)
             except:
-                ber_clu = 100.0 # Fail
+                ber_clu = 100.0
 
             # Attack Adaptive
-            att_adp = attack_func(stego_adp)
+            att_adp = attack_func(np.copy(stego_adp))
             try:
                 ext_adp = self.algo_adaptive.extract(att_adp)
                 ber_adp = Utils.calculate_ber(message, ext_adp)
             except:
-                ber_adp = 100.0 # Fail
+                ber_adp = 100.0
+            
+            # Determine winner (lowest BER)
+            ber_dict = {'Std': ber_std, 'Clu': ber_clu, 'Adp': ber_adp}
+            winner = min(ber_dict, key=ber_dict.get)
             
             self.results_robustness.append({
                 'Attack': attack_name,
                 'Std_BER': ber_std,
                 'Clu_BER': ber_clu,
-                'Adp_BER': ber_adp
+                'Adp_BER': ber_adp,
+                'Winner': winner
             })
-            print(f"   Attack: {attack_name} | Std BER: {ber_std:.2f}% | Clu BER: {ber_clu:.2f}% | Adp BER: {ber_adp:.2f}%")
+            
+            print(f"{attack_name:<30} | {ber_std:>9.2f}% | {ber_clu:>9.2f}% | {ber_adp:>9.2f}% | {winner:<10}")
 
     def run_parameter_sensitivity(self):
         print("\n[3/3] Menjalankan Parameter Sensitivity Test (Adaptive Only)...")
@@ -429,8 +644,8 @@ class StegoAutomatedTester:
         
         # 2. Grafik Robustness (Bar Chart)
         df_rob = pd.DataFrame(self.results_robustness)
-        
-        plt.figure(figsize=(10, 5))
+    
+        plt.figure(figsize=(20, 8))
         x = np.arange(len(df_rob['Attack']))
         width = 0.25
         
@@ -438,23 +653,129 @@ class StegoAutomatedTester:
         plt.bar(x, df_rob['Clu_BER'], width, label='Clustered Edge', color='green', alpha=0.7)
         plt.bar(x + width, df_rob['Adp_BER'], width, label='Adaptive Edge', color='blue', alpha=0.7)
         
-        plt.xlabel('Attack Type')
-        plt.ylabel('Bit Error Rate (%)')
-        plt.title('Robustness Comparison (Lower is Better)')
-        plt.xticks(x, df_rob['Attack'])
-        plt.legend()
-        plt.grid(axis='y', linestyle='--')
+        plt.xlabel('Attack Type', fontsize=12)
+        plt.ylabel('Bit Error Rate (%)', fontsize=12)
+        plt.title('Comprehensive Robustness Test (Lower is Better)', fontsize=14, fontweight='bold')
+        plt.xticks(x, df_rob['Attack'], rotation=60, ha='right', fontsize=9)
+        plt.legend(fontsize=11)
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.ylim(0, 105)
         
         plt.tight_layout()
-        plt.savefig('result_robustness.png')
-        print("   > Grafik disimpan: result_robustness.png")
-
-        # 3. Print Data Tables
-        print("\n=== RINGKASAN HASIL UJI KAPASITAS ===")
-        print(df_payload.to_string(index=False))
+        plt.savefig('result_robustness_comprehensive.png', dpi=150)
+        print("   > Grafik disimpan: result_robustness_comprehensive.png")
         
-        print("\n=== RINGKASAN HASIL UJI KETAHANAN ===")
+        
+        # ✅ 3. Grafik Khusus: NOISE DISTRIBUTIONS ONLY
+        plt.figure(figsize=(14, 6))
+        
+        noise_attacks = df_rob[
+            df_rob['Attack'].str.contains('Gaussian|Rayleigh|Erlang|Uniform|Exponential', case=False)
+        ]
+        
+        if len(noise_attacks) > 0:
+            x_noise = np.arange(len(noise_attacks))
+            
+            plt.bar(x_noise - width, noise_attacks['Std_BER'], width, 
+                    label='Standard Edge', color='red', alpha=0.7)
+            plt.bar(x_noise, noise_attacks['Clu_BER'], width, 
+                    label='Clustered Edge', color='green', alpha=0.7)
+            plt.bar(x_noise + width, noise_attacks['Adp_BER'], width, 
+                    label='Adaptive Edge', color='blue', alpha=0.7)
+            
+            plt.xlabel('Noise Distribution Type', fontsize=12)
+            plt.ylabel('Bit Error Rate (%)', fontsize=12)
+            plt.title('Robustness Against Statistical Noise Distributions', fontsize=14, fontweight='bold')
+            plt.xticks(x_noise, noise_attacks['Attack'], rotation=45, ha='right')
+            plt.legend(fontsize=11)
+            plt.grid(axis='y', linestyle='--', alpha=0.7)
+            plt.ylim(0, 105)
+            
+            plt.tight_layout()
+            plt.savefig('result_robustness_noise_distributions.png', dpi=150)
+            print("   > Grafik noise distributions disimpan: result_robustness_noise_distributions.png")
+        
+        
+        # ✅ 4. Grafik Grouped by Attack Category (Updated)
+        plt.figure(figsize=(12, 6))
+        
+        # Categorize attacks
+        noise_dist = df_rob[df_rob['Attack'].str.contains('Gaussian|Rayleigh|Erlang|Uniform|Exponential')]
+        impulse_noise = df_rob[df_rob['Attack'].str.contains('Salt|Speckle')]
+        filtering = df_rob[df_rob['Attack'].str.contains('Median|Blur|Sharp')]
+        compression = df_rob[df_rob['Attack'].str.contains('JPEG')]
+        geometric = df_rob[df_rob['Attack'].str.contains('Scaling|Rotation|Crop')]
+        
+        categories = ['Noise\nDistributions', 'Impulse\nNoise', 'Filtering', 'Compression', 'Geometric']
+        std_means = [
+            noise_dist['Std_BER'].mean() if len(noise_dist) > 0 else 0,
+            impulse_noise['Std_BER'].mean() if len(impulse_noise) > 0 else 0,
+            filtering['Std_BER'].mean() if len(filtering) > 0 else 0,
+            compression['Std_BER'].mean() if len(compression) > 0 else 0,
+            geometric['Std_BER'].mean() if len(geometric) > 0 else 0
+        ]
+        clu_means = [
+            noise_dist['Clu_BER'].mean() if len(noise_dist) > 0 else 0,
+            impulse_noise['Clu_BER'].mean() if len(impulse_noise) > 0 else 0,
+            filtering['Clu_BER'].mean() if len(filtering) > 0 else 0,
+            compression['Clu_BER'].mean() if len(compression) > 0 else 0,
+            geometric['Clu_BER'].mean() if len(geometric) > 0 else 0
+        ]
+        adp_means = [
+            noise_dist['Adp_BER'].mean() if len(noise_dist) > 0 else 0,
+            impulse_noise['Adp_BER'].mean() if len(impulse_noise) > 0 else 0,
+            filtering['Adp_BER'].mean() if len(filtering) > 0 else 0,
+            compression['Adp_BER'].mean() if len(compression) > 0 else 0,
+            geometric['Adp_BER'].mean() if len(geometric) > 0 else 0
+        ]
+        
+        x_cat = np.arange(len(categories))
+        plt.bar(x_cat - width, std_means, width, label='Standard Edge', color='red', alpha=0.7)
+        plt.bar(x_cat, clu_means, width, label='Clustered Edge', color='green', alpha=0.7)
+        plt.bar(x_cat + width, adp_means, width, label='Adaptive Edge', color='blue', alpha=0.7)
+        
+        plt.xlabel('Attack Category', fontsize=12)
+        plt.ylabel('Average BER (%)', fontsize=12)
+        plt.title('Average Robustness by Attack Category', fontsize=14, fontweight='bold')
+        plt.xticks(x_cat, categories)
+        plt.legend(fontsize=11)
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.ylim(0, max(max(std_means), max(clu_means), max(adp_means)) * 1.1)
+        
+        plt.tight_layout()
+        plt.savefig('result_robustness_by_category.png', dpi=150)
+        print("   > Grafik kategori disimpan: result_robustness_by_category.png")
+        
+        
+        # Print tables
+        print("\n" + "="*85)
+        print("=== RINGKASAN HASIL UJI KETAHANAN (COMPREHENSIVE) ===")
+        print("="*85)
         print(df_rob.to_string(index=False))
+        
+        # ✅ Winner Statistics
+        print("\n" + "="*50)
+        print("=== STATISTIK PEMENANG (Metode Terbaik per Attack) ===")
+        print("="*50)
+        winner_counts = df_rob['Winner'].value_counts()
+        for method, count in winner_counts.items():
+            pct = (count / len(df_rob)) * 100
+            print(f"{method:<15}: {count:>3} wins ({pct:>5.1f}%)")
+        
+        # ✅ Summary Statistics
+        print("\n" + "="*70)
+        print("=== STATISTIK RATA-RATA BER PER KATEGORI ===")
+        print("="*70)
+        print(f"{'Category':<20} | {'Standard':<10} | {'Clustered':<10} | {'Adaptive':<10}")
+        print("-" * 70)
+        for i, cat in enumerate(categories):
+            print(f"{cat.replace(chr(10), ' '):<20} | {std_means[i]:>9.2f}% | {clu_means[i]:>9.2f}% | {adp_means[i]:>9.2f}%")
+        
+        # Overall average
+        print("-" * 70)
+        print(f"{'OVERALL AVERAGE':<20} | {df_rob['Std_BER'].mean():>9.2f}% | "
+            f"{df_rob['Clu_BER'].mean():>9.2f}% | {df_rob['Adp_BER'].mean():>9.2f}%")
+        print("="*70)
 
 # =============================================================================
 # MAIN EXECUTION
@@ -468,9 +789,8 @@ if __name__ == "__main__":
     tester = StegoAutomatedTester(TEST_IMAGE_PATH)
     
     # Jalankan semua tes
-    tester.run_payload_stress_test()
+    # tester.run_payload_stress_test()
     tester.run_robustness_test()
-    tester.run_parameter_sensitivity()
     
     # Visualisasi
     tester.visualize_results()
