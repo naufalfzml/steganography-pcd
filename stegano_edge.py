@@ -79,13 +79,16 @@ class SteganographyEdge:
             return False, f"Error: {str(e)}"
 
     @staticmethod
-    def decode_message(image_path, threshold=50):
+    def decode_message(image_path, threshold=50, expected_length=None):
         """
         Mengekstrak pesan dari edge pixels gambar
 
         Args:
             image_path: Path ke gambar yang berisi pesan tersembunyi
             threshold: Threshold untuk edge detection (harus sama dengan saat encode)
+            expected_length: (Optional) Panjang pesan yang diharapkan (jumlah karakter).
+                            Jika diisi, akan mengabaikan delimiter dan membaca sejumlah karakter ini.
+                            Digunakan untuk robustness test agar perbandingan adil.
 
         Returns:
             tuple: (success: bool, message: str)
@@ -119,6 +122,21 @@ class SteganographyEdge:
 
             # Convert bits ke karakter
             message = ""
+            
+            # ✅ JIKA expected_length DITENTUKAN
+            if expected_length is not None:
+                target_bits = expected_length * 8
+                # Pastikan tidak index out of bound
+                bits_to_process = message_bits[:target_bits]
+                
+                for i in range(0, len(bits_to_process), 8):
+                    byte = bits_to_process[i:i+8]
+                    if len(byte) == 8:
+                        char = chr(int(''.join(byte), 2))
+                        message += char
+                return True, message
+
+            # ✅ NORMAL DECODING (mencari delimiter)
             for i in range(0, len(message_bits), 8):
                 byte = message_bits[i:i+8]
                 if len(byte) == 8:
@@ -135,6 +153,7 @@ class SteganographyEdge:
             return False, f"File '{image_path}' tidak ditemukan!"
         except Exception as e:
             return False, f"Error: {str(e)}"
+
 
     @staticmethod
     def get_capacity(image_path, threshold=50):

@@ -79,14 +79,19 @@ class Evaluation:
     @staticmethod
     def calculate_ber(original_message, decoded_message):
         """
-        Hitung Bit Error Rate (BER)
-        BER = Jumlah bit berbeda / Total bit
+        Hitung Bit Error Rate (BER) berdasarkan panjang pesan ASLI
+        BER = Jumlah bit berbeda / Total bit pesan asli
         BER rendah = decode lebih akurat
-
+        
+        Logika:
+        - Bit yang hilang (decoded lebih pendek) = dihitung sebagai ERROR
+        - Bit yang berlebih (decoded lebih panjang) = DIABAIKAN (trim)
+        - Comparison dilakukan sepanjang pesan asli
+        
         Args:
             original_message: Pesan asli
             decoded_message: Pesan hasil decode
-
+        
         Returns:
             tuple: (success: bool, result: dict atau error message)
         """
@@ -94,34 +99,55 @@ class Evaluation:
             # Convert ke binary
             original_bits = ''.join([format(ord(char), '08b') for char in original_message])
             decoded_bits = ''.join([format(ord(char), '08b') for char in decoded_message])
-
-            # Pad ke panjang yang sama (untuk handle decode incomplete)
-            max_len = max(len(original_bits), len(decoded_bits))
-            original_bits = original_bits.ljust(max_len, '0')
-            decoded_bits = decoded_bits.ljust(max_len, '0')
-
+            
+            # Panjang pesan asli adalah ground truth
+            original_len = len(original_bits)
+            decoded_len = len(decoded_bits)
+            
+            # Edge case: pesan asli kosong
+            if original_len == 0:
+                return True, {
+                    'total_bits': 0,
+                    'error_bits': 0,
+                    'correct_bits': 0,
+                    'ber': 0.0,
+                    'ber_percentage': 0.0,
+                    'accuracy': 100.0
+                }
+            
             # Hitung bit errors
             error_count = 0
-            for i in range(max_len):
-                if original_bits[i] != decoded_bits[i]:
+            
+            # Bandingkan bit sepanjang pesan asli
+            for i in range(original_len):
+                if i >= decoded_len:
+                    # Bit hilang (decoded lebih pendek) = ERROR
                     error_count += 1
-
-            # BER
-            ber = error_count / max_len if max_len > 0 else 0
-
+                elif original_bits[i] != decoded_bits[i]:
+                    # Bit berbeda = ERROR
+                    error_count += 1
+                # else: bit sama = BENAR
+            
+            # BER dihitung dari panjang ASLI
+            ber = error_count / original_len
+            correct_bits = original_len - error_count
+            
             result = {
-                'total_bits': max_len,
+                'total_bits': original_len,
                 'error_bits': error_count,
-                'correct_bits': max_len - error_count,
+                'correct_bits': correct_bits,
                 'ber': ber,
                 'ber_percentage': ber * 100,
-                'accuracy': (1 - ber) * 100
+                'accuracy': (1 - ber) * 100,
+                'decoded_length': decoded_len,  # Informasi tambahan
+                'length_diff': decoded_len - original_len  # Informasi tambahan
             }
-
+            
             return True, result
-
+            
         except Exception as e:
             return False, f"Error: {str(e)}"
+
 
     @staticmethod
     def interpret_psnr(psnr):

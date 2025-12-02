@@ -173,7 +173,22 @@ class SteganographyEdgeAdaptive:
             return False, str(e)
 
     @staticmethod
-    def decode_message(image_path, threshold=30, eps=4, min_samples=3, use_isolated=False):
+    def decode_message(image_path, threshold=30, eps=4, min_samples=3, use_isolated=False, expected_length=None):
+        """
+        Decode pesan dari Adaptive Edge
+
+        Args:
+            image_path: Path gambar dengan pesan
+            threshold: Threshold edge detection
+            eps: DBSCAN eps
+            min_samples: DBSCAN min_samples
+            use_isolated: Tipe edge pixels
+            expected_length: (Optional) Panjang pesan yang diharapkan (jumlah karakter).
+                            Untuk robustness test.
+
+        Returns:
+            tuple: (success: bool, message: str)
+        """
         try:
             img = Image.open(image_path).convert('RGB')
             pixels = img.load()
@@ -182,14 +197,22 @@ class SteganographyEdgeAdaptive:
             success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
                 image_path, threshold, eps, min_samples, use_isolated
             )
-            if not success: return False, "Gagal deteksi edge"
+            if not success: 
+                return False, "Gagal deteksi edge"
             
             edge_coords.sort(key=lambda p: (p[1], p[0]))
             
             decoded_bits = ""
-            current_len = 0
-            target_len = 32 # Baca header dulu 32 bit
-            reading_header = True
+            
+            # ✅ SETUP MODE
+            if expected_length is not None:
+                # Mode Testing: Baca 32 bit header + (expected_length * 8) data
+                target_len = 32 + (expected_length * 8)
+                reading_header = False
+            else:
+                # Mode Normal: Baca header dulu
+                target_len = 32
+                reading_header = True
             
             # 2. Proses Decode Per Chunk
             for i in range(0, len(edge_coords), SteganographyEdgeAdaptive.CHUNK_SIZE):
@@ -206,8 +229,10 @@ class SteganographyEdgeAdaptive:
                 
                 # BACA DATA (Sisa channel)
                 for cx, cy, cc in chunk_channels[1:]:
-                    # Cek apakah sudah selesai baca semua
-                    if not reading_header and len(decoded_bits) >= target_len:
+                    # Cek apakah sudah selesai
+                    if expected_length is None and not reading_header and len(decoded_bits) >= target_len:
+                        break
+                    if expected_length is not None and len(decoded_bits) >= target_len:
                         break
                         
                     val = pixels[cx, cy][cc]
@@ -221,22 +246,29 @@ class SteganographyEdgeAdaptive:
                         bits = str(val & 1)
                         decoded_bits += bits
                         
-                    # Cek transisi Header -> Data
-                    if reading_header and len(decoded_bits) >= 32:
+                    # Cek transisi Header -> Data (HANYA NORMAL MODE)
+                    if expected_length is None and reading_header and len(decoded_bits) >= 32:
                         # Header selesai, parsing panjang pesan
                         len_bits = decoded_bits[:32]
                         msg_len = int(len_bits, 2)
                         
                         # Reset untuk baca body
-                        decoded_bits = decoded_bits[32:] # Sisa bit masuk ke data
+                        decoded_bits = decoded_bits[32:]
                         target_len = msg_len * 8
                         reading_header = False
                         
-                if not reading_header and len(decoded_bits) >= target_len:
+                if expected_length is None and not reading_header and len(decoded_bits) >= target_len:
+                    break
+                if expected_length is not None and len(decoded_bits) >= target_len:
                     break
             
             # Finalisasi
-            final_bits = decoded_bits[:target_len]
+            if expected_length is not None:
+                # Potong header 32 bit, ambil sesuai expected length
+                final_bits = decoded_bits[32 : 32 + (expected_length * 8)]
+            else:
+                final_bits = decoded_bits[:target_len]
+                
             message = ""
             for k in range(0, len(final_bits), 8):
                 byte = final_bits[k:k+8]

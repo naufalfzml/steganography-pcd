@@ -104,7 +104,7 @@ class SteganographyEdgeClustered:
             return False, f"Error: {str(e)}"
 
     @staticmethod
-    def decode_message(image_path, threshold=50, eps=6, min_samples=20, use_isolated=False):
+    def decode_message(image_path, threshold=50, eps=6, min_samples=20, use_isolated=False, expected_length=None):
         """
         Decode pesan dari edge pixels yang sudah di-clustering
 
@@ -114,6 +114,9 @@ class SteganographyEdgeClustered:
             eps: DBSCAN eps (HARUS SAMA dengan encode)
             min_samples: DBSCAN min_samples (HARUS SAMA dengan encode)
             use_isolated: HARUS SAMA dengan encode
+            expected_length: (Optional) Panjang pesan yang diharapkan (jumlah karakter).
+                            Jika diisi, akan mengabaikan header length dan membaca sejumlah karakter ini.
+                            Digunakan untuk robustness test.
 
         Returns:
             tuple: (success: bool, message: str)
@@ -146,7 +149,28 @@ class SteganographyEdgeClustered:
                 # Ambil LSB dari setiap channel RGB
                 for value in pixel:
                     message_bits.append(str(value & 1))
+            
+            # ✅ MODIFIKASI UNTUK ROBUSTNESS TEST
+            if expected_length is not None:
+                # Skip length header (16 bits)
+                if len(message_bits) < 16:
+                    return False, "Tidak cukup data"
+                
+                message_bits_data = message_bits[16:]  # Skip header area
+                target_bits = expected_length * 8
+                
+                # Ambil bit sebanyak target
+                bits_to_process = message_bits_data[:target_bits]
+                
+                message = ""
+                for i in range(0, len(bits_to_process), 8):
+                    byte = bits_to_process[i:i+8]
+                    if len(byte) == 8:
+                        char = chr(int(''.join(byte), 2))
+                        message += char
+                return True, message
 
+            # ✅ NORMAL DECODING (baca header length)
             # Minimal harus ada 16 bits untuk length
             if len(message_bits) < 16:
                 return False, "Tidak cukup data untuk decode"
@@ -161,7 +185,8 @@ class SteganographyEdgeClustered:
 
             max_possible_chars = (len(message_bits) - 16) // 8
             if message_length > max_possible_chars:
-                return False, f"Length tidak valid ({message_length} > {max_possible_chars})"
+                # Limit ke max possible untuk stabilitas
+                message_length = max_possible_chars
 
             # Ekstrak message bits
             message_bits_data = message_bits[16:16 + (message_length * 8)]
@@ -180,6 +205,7 @@ class SteganographyEdgeClustered:
             return False, f"File '{image_path}' tidak ditemukan!"
         except Exception as e:
             return False, f"Error: {str(e)}"
+
 
     @staticmethod
     def get_capacity(image_path, threshold=50, eps=6, min_samples=20, use_isolated=False):
