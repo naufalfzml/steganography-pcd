@@ -559,14 +559,14 @@ class StegoAutomatedTester:
                 pct = (count / len(df_rob)) * 100
                 print(f"{method:<15}: {count:>3} wins ({pct:>5.1f}%)")
             
-            # ✅ FIX: Overall statistics dengan mapping yang BENAR
+            # Overall statistics dengan mapping yang BENAR
             print("\n" + "="*90)
             print("=== STATISTIK KESELURUHAN (Metrik Akademik) ===")
             print("="*90)
             print(f"{'Method':<20} | {'Cap (bits)':<12} | {'bpp':<10} | {'Avg BER':<10} | {'Win Rate':<10}")
             print("-" * 90)
             
-            # ✅ GUNAKAN MAPPING DICT YANG BENAR
+            # GUNAKAN MAPPING DICT YANG BENAR
             method_mapping = {
                 'Standard Edge': ('Std', self.capacity_std_bits, self.bpp_std),
                 'Clustered Edge': ('Clu', self.capacity_clu_bits, self.bpp_clu),
