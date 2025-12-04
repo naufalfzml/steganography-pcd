@@ -412,11 +412,11 @@ class StegoAutomatedTester:
         
         attacks = [
             ("No Attack", lambda x: x),
-            ("Gaussian (σ=15)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=15)),
-            ("Rayleigh (scale=25)", lambda x: Utils.add_rayleigh_noise(x, scale=25)),
-            ("Erlang (k=2,s=15)", lambda x: Utils.add_erlang_noise(x, shape=2, scale=15)),
-            ("Uniform (-50,+50)", lambda x: Utils.add_uniform_noise(x, low=-50, high=50)),
-            ("Exponential (s=25)", lambda x: Utils.add_exponential_noise(x, scale=25)),
+            ("Gaussian (σ=1)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=1)),
+            ("Rayleigh (scale=1)", lambda x: Utils.add_rayleigh_noise(x, scale=1)),
+            ("Erlang (k=1,s=1)", lambda x: Utils.add_erlang_noise(x, shape=1, scale=1)),
+            ("Uniform (-2,+2)", lambda x: Utils.add_uniform_noise(x, low=-2, high=2)),
+            ("Exponential (s=2.0)", lambda x: Utils.add_exponential_noise(x, scale=2.0)),
             ("Salt&Pepper (1.0%)", lambda x: Utils.add_salt_pepper_noise(x, 0.01)),
             ("JPEG (Q=90)", lambda x: Utils.apply_jpeg_compression(x, 90)),
         ]
