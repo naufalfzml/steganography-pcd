@@ -16,7 +16,7 @@ from stegano_edge_adaptive import SteganographyEdgeAdaptive
 # =============================================================================
 # GLOBAL CONFIGURATION
 # =============================================================================
-TEST_IMAGE_PATH = "images/bridge.tiff"
+TEST_IMAGE_PATH = "images/pepper.tiff"
 EDGE_THRESHOLD = 60
 ADP_EPS = 0.2
 ADP_MIN_SAMPLES = 3
@@ -413,21 +413,12 @@ class StegoAutomatedTester:
         attacks = [
             ("No Attack", lambda x: x),
             ("Gaussian (σ=15)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=15)),
-            ("Gaussian (σ=25)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=25)),
-            ("Gaussian (σ=35)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=35)),
-            ("Rayleigh (scale=15)", lambda x: Utils.add_rayleigh_noise(x, scale=15)),
             ("Rayleigh (scale=25)", lambda x: Utils.add_rayleigh_noise(x, scale=25)),
             ("Erlang (k=2,s=15)", lambda x: Utils.add_erlang_noise(x, shape=2, scale=15)),
-            ("Erlang (k=3,s=15)", lambda x: Utils.add_erlang_noise(x, shape=3, scale=15)),
-            ("Uniform (-30,+30)", lambda x: Utils.add_uniform_noise(x, low=-30, high=30)),
             ("Uniform (-50,+50)", lambda x: Utils.add_uniform_noise(x, low=-50, high=50)),
             ("Exponential (s=25)", lambda x: Utils.add_exponential_noise(x, scale=25)),
-            ("Salt&Pepper (0.5%)", lambda x: Utils.add_salt_pepper_noise(x, 0.005)),
             ("Salt&Pepper (1.0%)", lambda x: Utils.add_salt_pepper_noise(x, 0.01)),
-            ("Salt&Pepper (2.0%)", lambda x: Utils.add_salt_pepper_noise(x, 0.02)),
             ("JPEG (Q=90)", lambda x: Utils.apply_jpeg_compression(x, 90)),
-            ("JPEG (Q=70)", lambda x: Utils.apply_jpeg_compression(x, 70)),
-            ("JPEG (Q=50)", lambda x: Utils.apply_jpeg_compression(x, 50)),
         ]
         
         print(f"\n{'Attack Type':<30} | {'Std BER':<10} | {'Clu BER':<10} | {'Adp BER':<10} | {'Winner':<10}")
