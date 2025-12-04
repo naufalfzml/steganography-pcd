@@ -16,12 +16,12 @@ from stegano_edge_adaptive import SteganographyEdgeAdaptive
 # =============================================================================
 # GLOBAL CONFIGURATION
 # =============================================================================
-TEST_IMAGE_PATH = "images/pepper.tiff"
-EDGE_THRESHOLD = 30
-ADP_EPS = 0.15
-ADP_MIN_SAMPLES = 4
+TEST_IMAGE_PATH = "images/bridge.tiff"
+EDGE_THRESHOLD = 60
+ADP_EPS = 0.2
+ADP_MIN_SAMPLES = 3
 ADP_USE_ISOLATED = False
-ADP_VAR_PERCENTILE = 75
+ADP_VAR_PERCENTILE = 90
 RANDOM_SEED = 42
 random.seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
@@ -288,7 +288,7 @@ class StegoAutomatedTester:
         
         # Convert ke bits (termasuk overhead header/delimiter)
         self.capacity_std_bits = self.capacity_std_chars * 8 + 56  # +56 bits delimiter "<<END>>"
-        self.capacity_clu_bits = self.capacity_clu_chars * 8 + 16  # +16 bits header length
+        self.capacity_clu_bits = self.capacity_clu_chars * 8 + 32  # +32 bits header length
         self.capacity_adp_bits = self.capacity_adp_chars * 8 + 32  # +32 bits header length
         
         # ✅ HITUNG BPP (Bits Per Pixel)

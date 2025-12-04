@@ -12,15 +12,15 @@ def find_optimal_parameters():
     IMAGE_PATH = "images/pepper.tiff"
     OUTPUT_PATH = "temp_stego_adaptive_test.png"
     MESSAGE = "a" * 256
-    BER_TARGET = 10.0  # dalam persen
+    BER_TARGET = 0  # dalam persen
 
     # --- Parameter yang akan diuji ---
     # Berdasarkan diskusi, kita persempit rentang yang paling mungkin berhasil
-    thresholds = [60]
-    eps_values = [10, 20, 5]
-    min_samples_values = [4]
+    thresholds = [40, 60]
+    eps_values = [0.15, 0.16, 0.2]
+    min_samples_values = [3, 4, 10]
     use_isolated_options = [False]  # False = grouped, True = isolated
-    variance_percentiles = [75]
+    variance_percentiles = [45, 50, 75, 90]
 
     print("--- Memulai Pencarian Parameter Optimal untuk Stegano Edge Adaptive ---")
     print(f"Gambar: {IMAGE_PATH}")

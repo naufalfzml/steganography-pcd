@@ -54,16 +54,13 @@ class SteganographyEdgeClustered:
             
             # Tambahkan length prefix (16 bits untuk length)
             message_length = len(message)
-            if message_length > 65535:  # Max untuk 16 bits
-                return False, "Pesan terlalu panjang (maksimal 65535 karakter)"
-            
-            length_bits = format(message_length, '016b')
+            length_bits = format(message_length, '032b') 
             message_bits = length_bits + message_bits_data
 
             # Validasi kapasitas
             max_bits = len(edge_coords) * 3
             if len(message_bits) > max_bits:
-                max_chars = (max_bits - 16) // 8
+                max_chars = (max_bits - 32) // 8  # Kurangi 32 bit header
                 return False, f"Pesan terlalu panjang! Maksimal {max_chars} karakter."
 
             # Embed ke edge pixels
@@ -172,24 +169,24 @@ class SteganographyEdgeClustered:
 
             # ✅ NORMAL DECODING (baca header length)
             # Minimal harus ada 16 bits untuk length
-            if len(message_bits) < 16:
+            if len(message_bits) < 32:
                 return False, "Tidak cukup data untuk decode"
 
             # Ekstrak length dari 16 bits pertama
-            length_bits = ''.join(message_bits[:16])
+            length_bits = ''.join(message_bits[:32])
             message_length = int(length_bits, 2)
 
             # Validasi length
             if message_length == 0:
                 return False, "Tidak ada pesan ditemukan (length = 0)"
 
-            max_possible_chars = (len(message_bits) - 16) // 8
+            max_possible_chars = (len(message_bits) - 32) // 8
             if message_length > max_possible_chars:
                 # Limit ke max possible untuk stabilitas
                 message_length = max_possible_chars
 
             # Ekstrak message bits
-            message_bits_data = message_bits[16:16 + (message_length * 8)]
+            message_bits_data = message_bits[32:32 + (message_length * 8)]
 
             # Convert bits ke karakter
             message = ""
