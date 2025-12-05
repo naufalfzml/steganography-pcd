@@ -6,6 +6,7 @@ from edge_detection import EdgeDetection
 from edge_clustering import EdgeClustering
 from evaluation import Evaluation
 
+#test
 
 def print_header():
     """Menampilkan header program"""
