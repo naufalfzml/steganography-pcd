@@ -16,7 +16,7 @@ from stegano_edge_adaptive import SteganographyEdgeAdaptive
 # =============================================================================
 # GLOBAL CONFIGURATION
 # =============================================================================
-TEST_IMAGE_PATH = "images/pepper.tiff"
+TEST_IMAGE_PATH = "images/bridge.tiff"
 EDGE_THRESHOLD = 60
 ADP_EPS = 0.2
 ADP_MIN_SAMPLES = 3

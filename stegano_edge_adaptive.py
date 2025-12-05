@@ -34,39 +34,93 @@ class SteganographyEdgeAdaptive:
         return np.mean(variances) if variances else 0
 
     @staticmethod
-    def get_capacity(image_path, threshold=30, eps=4, min_samples=3, 
+    def get_capacity(image_path, threshold=60, eps=0.2, min_samples=3, 
                      use_isolated=False, variance_percentile=90):
-        # Estimasi kasar saja untuk menu
         try:
+            # 1. Load Gambar & Edge (Sama seperti encode)
+            img = Image.open(image_path).convert('RGB')
             success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
                 image_path, threshold, eps, min_samples, use_isolated
             )
+            
             if not success: return False, edge_coords
             
+            # Wajib sort agar urutan chunk sama dengan saat encode
+            edge_coords.sort(key=lambda p: (p[1], p[0]))
+            
             total_pixels = len(edge_coords)
+            if total_pixels == 0:
+                 return True, {'max_chars': 0, 'edge_pixels': 0}
+
+            # 2. Hitung Variance Per Chunk (Simulasi Logika Encode)
+            chunk_variances = []
             
-            # Calculate percentage
-            img_temp = Image.open(image_path)
-            w_temp, h_temp = img_temp.size
-            all_pixels = w_temp * h_temp
-            edge_percentage = (total_pixels / all_pixels) * 100
+            # Kita butuh loop dulu untuk kumpulkan variance agar bisa hitung threshold
+            # Karena threshold ditentukan dari percentile SELURUH chunk
+            num_chunks = len(edge_coords) // SteganographyEdgeAdaptive.CHUNK_SIZE
             
-            # Estimasi: Anggap 50% High, 50% Low
-            # High Chunk (8 px): 1 flag + 15 bit data = 16 bit terpakai (2 bit/px)
-            # Low Chunk (8 px): 1 flag + 7 bit data = 8 bit terpakai (1 bit/px)
+            for i in range(0, len(edge_coords), SteganographyEdgeAdaptive.CHUNK_SIZE):
+                chunk = edge_coords[i:i + SteganographyEdgeAdaptive.CHUNK_SIZE]
+                # Skip jika chunk tidak full (sisa di akhir)
+                if len(chunk) < SteganographyEdgeAdaptive.CHUNK_SIZE:
+                    continue
+                    
+                v = SteganographyEdgeAdaptive.calculate_chunk_variance(img, chunk)
+                chunk_variances.append(v)
+
+            if not chunk_variances:
+                return False, "Tidak ada chunk valid yang terbentuk"
+
+            # 3. Hitung Global Threshold
+            global_threshold = np.percentile(chunk_variances, variance_percentile)
+
+            # 4. Hitung Total Bits Berdasarkan Klasifikasi High/Low
+            total_bits_capacity = 0
+            high_chunks = 0
+            low_chunks = 0
             
-            avg_bits = 1.5 # Rata-rata
-            max_bits = int(total_pixels * 3 * avg_bits) # *3 channels
-            max_chars = max_bits // 8
+            # Hitung per chunk
+            for v in chunk_variances:
+                # Dalam 1 chunk (8 pixel) terdapat 24 channel (8x3)
+                # Channel pertama dipakai untuk FLAG (bukan data)
+                # Sisa channel untuk data = 23 channel
+                
+                available_channels = (SteganographyEdgeAdaptive.CHUNK_SIZE * 3) - 1
+                
+                if v >= global_threshold:
+                    # Mode High: 2 bit per channel
+                    bits = available_channels * 2 
+                    high_chunks += 1
+                else:
+                    # Mode Low: 1 bit per channel
+                    bits = available_channels * 1
+                    low_chunks += 1
+                
+                total_bits_capacity += bits
+
+            # Reserve untuk header (32 bit)
+            max_bits_data = total_bits_capacity - 32
+            max_chars = max_bits_data // 8
             
+            # Hitung persentase edge
+            w, h = img.size
+            edge_percentage = (total_pixels / (w * h)) * 100
+
             return True, {
                 'edge_pixels': total_pixels,
-                'edge_percentage': edge_percentage,
+                'edge_percentage': f"{edge_percentage:.2f}%",
+                'max_bits_raw': total_bits_capacity,
                 'max_chars': max_chars,
-                'mode': 'Adaptive Block Flagging'
+                'high_variance_chunks': high_chunks,
+                'low_variance_chunks': low_chunks,
+                'threshold_val': global_threshold,
+                'mode': 'Real Adaptive Calculation'
             }
-        except:
-            return False, "Error calc capacity"
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return False, f"Error calculating real capacity: {str(e)}"
 
     @staticmethod
     def encode_message(image_path, message, output_path, threshold=30,
