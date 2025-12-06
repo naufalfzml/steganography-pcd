@@ -8,14 +8,11 @@ import random
 import string
 import os
 
-# Import Real Classes
 from stegano_edge import SteganographyEdge
 from stegano_edge_clustered import SteganographyEdgeClustered
 from stegano_edge_adaptive import SteganographyEdgeAdaptive
 
-# =============================================================================
-# GLOBAL CONFIGURATION
-# =============================================================================
+# Konfigurasi
 TEST_IMAGE_PATH = "images/bridge.tiff"
 EDGE_THRESHOLD = 60
 ADP_EPS = 0.2
@@ -26,9 +23,6 @@ RANDOM_SEED = 42
 random.seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
-# =============================================================================
-# BAGIAN 1: KELAS ALGORITMA (WRAPPER)
-# =============================================================================
 
 class StandardEdgeStego:
     def get_capacity(self, image):
@@ -157,9 +151,6 @@ class AdaptiveEdgeStego:
             return msg
         return ""
 
-# =============================================================================
-# BAGIAN 2: UTILITIES & METRICS
-# =============================================================================
 
 class Utils:
     @staticmethod
@@ -261,15 +252,12 @@ class Utils:
         output = np.clip(output, 0, 255).astype(np.uint8)
         return output
 
-# =============================================================================
-# BAGIAN 3: AUTOMATED TESTING FRAMEWORK
-# =============================================================================
 
 class StegoAutomatedTester:
     def __init__(self, image_path):
         self.original_image = cv2.imread(image_path)
         if self.original_image is None:
-            print("⚠ Gambar tidak ditemukan. Membuat dummy image gradient...")
+            print("Gambar tidak ditemukan. Membuat dummy image...")
             self.original_image = np.zeros((512, 512, 3), dtype=np.uint8)
             for i in range(512):
                 self.original_image[i, :] = (i % 256, (i*2) % 256, (255-i) % 256)
@@ -281,17 +269,14 @@ class StegoAutomatedTester:
         self.results_payload = []
         self.results_robustness = []
         
-        # ✅ HITUNG KAPASITAS DALAM CHARS DAN BITS
         self.capacity_std_chars = self.algo_standard.get_capacity(self.original_image)
         self.capacity_clu_chars = self.algo_clustered.get_capacity(self.original_image)
         self.capacity_adp_chars = self.algo_adaptive.get_capacity(self.original_image)
         
-        # Convert ke bits (termasuk overhead header/delimiter)
-        self.capacity_std_bits = self.capacity_std_chars * 8 + 56  # +56 bits delimiter "<<END>>"
-        self.capacity_clu_bits = self.capacity_clu_chars * 8 + 32  # +32 bits header length
-        self.capacity_adp_bits = self.capacity_adp_chars * 8 + 32  # +32 bits header length
+        self.capacity_std_bits = self.capacity_std_chars * 8 + 56
+        self.capacity_clu_bits = self.capacity_clu_chars * 8 + 32
+        self.capacity_adp_bits = self.capacity_adp_chars * 8 + 32
         
-        # ✅ HITUNG BPP (Bits Per Pixel)
         h, w = self.original_image.shape[:2]
         self.total_pixels = h * w
         
@@ -299,8 +284,7 @@ class StegoAutomatedTester:
         self.bpp_clu = self.capacity_clu_bits / self.total_pixels
         self.bpp_adp = self.capacity_adp_bits / self.total_pixels
         
-        # Display capacity info dengan BITS sebagai primary
-        print(f"\n📊 Kapasitas Maksimal Gambar Original ({w}×{h} = {self.total_pixels:,} pixels)")
+        print(f"\nKapasitas Maksimal Gambar Original ({w}x{h} = {self.total_pixels:,} pixels)")
         print("="*95)
         print(f"{'Method':<20} | {'Capacity (bits)':<18} | {'bpp':<10} | {'Chars':<12} | {'Overhead':<10}")
         print("-"*95)
@@ -311,14 +295,10 @@ class StegoAutomatedTester:
         print(f"{'Adaptive Edge':<20} | {self.capacity_adp_bits:>17,} | {self.bpp_adp:>9.4f} | "
               f"{self.capacity_adp_chars:>11,} | 32 bits")
         print("="*95)
-        print("ℹ️  bpp (bits per pixel) = metrik standar untuk publikasi ilmiah")
-        print("ℹ️  Overhead = bits untuk header/delimiter (bukan data payload)")
 
     def run_payload_stress_test(self):
         print("\n[1/2] Menjalankan Payload Capacity Stress Test...")
-        print("ℹ️  Format: Utilisasi% (payload_bits/capacity_bits) | PSNR | SSIM\n")
         
-        # Gunakan kapasitas standard sebagai baseline 100%
         max_cap_chars = self.capacity_std_chars
         max_cap_bits = self.capacity_std_bits
         
@@ -329,7 +309,6 @@ class StegoAutomatedTester:
             payload_bits = msg_len * 8
             message = Utils.generate_random_string(msg_len)
             
-            # --- Test Standard ---
             ret_s, stego_s = self.algo_standard.embed(self.original_image, message)
             if ret_s:
                 p_s = psnr(self.original_image, stego_s)
@@ -339,7 +318,6 @@ class StegoAutomatedTester:
             else:
                 p_s, s_s, ber_s = 0, 0, 100
 
-            # --- Test Clustered ---
             ret_c, stego_c = self.algo_clustered.embed(self.original_image, message)
             if ret_c:
                 p_c = psnr(self.original_image, stego_c)
@@ -349,7 +327,6 @@ class StegoAutomatedTester:
             else:
                 p_c, s_c, ber_c = 0, 0, 100
 
-            # --- Test Adaptive ---
             ret_a, stego_a = self.algo_adaptive.embed(self.original_image, message)
             if ret_a:
                 p_a = psnr(self.original_image, stego_a)
@@ -359,7 +336,6 @@ class StegoAutomatedTester:
             else:
                 p_a, s_a, ber_a = 0, 0, 100
 
-            # ✅ HITUNG UTILISASI UNTUK SETIAP ALGORITMA
             util_std = (payload_bits / self.capacity_std_bits) * 100
             util_clu = (payload_bits / self.capacity_clu_bits) * 100
             util_adp = (payload_bits / self.capacity_adp_bits) * 100
@@ -380,44 +356,36 @@ class StegoAutomatedTester:
             })
             
             print(f"   {pct:>3}% | {payload_bits:>8,} bits ({msg_len:>6,} chars)")
-            print(f"        Std: {util_std:>5.1f}% ({payload_bits:>8,}/{self.capacity_std_bits:>8,}) | "
-                  f"PSNR: {p_s:>6.2f}dB | SSIM: {s_s:.4f}")
-            print(f"        Clu: {util_clu:>5.1f}% ({payload_bits:>8,}/{self.capacity_clu_bits:>8,}) | "
-                  f"PSNR: {p_c:>6.2f}dB | SSIM: {s_c:.4f}")
-            print(f"        Adp: {util_adp:>5.1f}% ({payload_bits:>8,}/{self.capacity_adp_bits:>8,}) | "
-                  f"PSNR: {p_a:>6.2f}dB | SSIM: {s_a:.4f}")
+            print(f"        Std: {util_std:>5.1f}% | PSNR: {p_s:>6.2f}dB | SSIM: {s_s:.4f}")
+            print(f"        Clu: {util_clu:>5.1f}% | PSNR: {p_c:>6.2f}dB | SSIM: {s_c:.4f}")
+            print(f"        Adp: {util_adp:>5.1f}% | PSNR: {p_a:>6.2f}dB | SSIM: {s_a:.4f}")
             print()
 
     def run_robustness_test(self):
         print("\n[2/2] Menjalankan Robustness Test...")
         
-        # Fix payload 50% dari Standard capacity
         payload_chars = int(self.capacity_std_chars * 0.5)
         payload_bits = payload_chars * 8
         message = Utils.generate_random_string(payload_chars)
         
-        print(f"   ℹ️  Payload: {payload_bits:,} bits ({payload_chars:,} chars)")
-        print(f"   ℹ️  Utilisasi Kapasitas:")
+        print(f"   Payload: {payload_bits:,} bits ({payload_chars:,} chars)")
         util_std = (payload_bits / self.capacity_std_bits) * 100
         util_clu = (payload_bits / self.capacity_clu_bits) * 100
         util_adp = (payload_bits / self.capacity_adp_bits) * 100
-        print(f"      - Standard : {util_std:>5.1f}% ({payload_bits:>8,}/{self.capacity_std_bits:>8,} bits)")
-        print(f"      - Clustered: {util_clu:>5.1f}% ({payload_bits:>8,}/{self.capacity_clu_bits:>8,} bits)")
-        print(f"      - Adaptive : {util_adp:>5.1f}% ({payload_bits:>8,}/{self.capacity_adp_bits:>8,} bits)")
+        print(f"   Utilisasi: Std={util_std:.1f}%, Clu={util_clu:.1f}%, Adp={util_adp:.1f}%")
         
-        # Generate Base Stego Images
         _, stego_std = self.algo_standard.embed(self.original_image, message)
         _, stego_clu = self.algo_clustered.embed(self.original_image, message)
         _, stego_adp = self.algo_adaptive.embed(self.original_image, message)
         
         attacks = [
             ("No Attack", lambda x: x),
-            ("Gaussian (σ=1)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=1)),
-            ("Rayleigh (scale=1)", lambda x: Utils.add_rayleigh_noise(x, scale=1)),
+            ("Gaussian (s=1)", lambda x: Utils.add_gaussian_noise(x, mean=0, sigma=1)),
+            ("Rayleigh (s=1)", lambda x: Utils.add_rayleigh_noise(x, scale=1)),
             ("Erlang (k=1,s=1)", lambda x: Utils.add_erlang_noise(x, shape=1, scale=1)),
             ("Uniform (-2,+2)", lambda x: Utils.add_uniform_noise(x, low=-2, high=2)),
-            ("Exponential (s=2.0)", lambda x: Utils.add_exponential_noise(x, scale=2.0)),
-            ("Salt&Pepper (1.0%)", lambda x: Utils.add_salt_pepper_noise(x, 0.01)),
+            ("Exponential (s=2)", lambda x: Utils.add_exponential_noise(x, scale=2.0)),
+            ("Salt&Pepper (1%)", lambda x: Utils.add_salt_pepper_noise(x, 0.01)),
             ("JPEG (Q=90)", lambda x: Utils.apply_jpeg_compression(x, 90)),
         ]
         
@@ -429,21 +397,21 @@ class StegoAutomatedTester:
             try:
                 ext_std = self.algo_standard.extract(att_std, expected_length=payload_chars)
                 ber_std = Utils.calculate_ber(message, ext_std)
-            except Exception as e:
+            except:
                 ber_std = 100.0
 
             att_clu = attack_func(np.copy(stego_clu))
             try:
                 ext_clu = self.algo_clustered.extract(att_clu, expected_length=payload_chars)
                 ber_clu = Utils.calculate_ber(message, ext_clu)
-            except Exception as e:
+            except:
                 ber_clu = 100.0
 
             att_adp = attack_func(np.copy(stego_adp))
             try:
                 ext_adp = self.algo_adaptive.extract(att_adp, expected_length=payload_chars)
                 ber_adp = Utils.calculate_ber(message, ext_adp)
-            except Exception as e:
+            except:
                 ber_adp = 100.0
             
             ber_dict = {'Std': ber_std, 'Clu': ber_clu, 'Adp': ber_adp}
@@ -462,13 +430,11 @@ class StegoAutomatedTester:
     def visualize_results(self):
         print("\n[Visualizing Results...]")
         
-        # ✅ 1. PAYLOAD TEST
         if len(self.results_payload) > 0:
             df_payload = pd.DataFrame(self.results_payload)
             
-            # Print capacity comparison dengan BITS
             print("\n" + "="*95)
-            print("=== PERBANDINGAN KAPASITAS (Metrik Standar Akademik) ===")
+            print("=== PERBANDINGAN KAPASITAS ===")
             print("="*95)
             print(f"{'Method':<20} | {'Capacity (bits)':<18} | {'bpp':<10} | {'Chars':<12} | {'Relative':<10}")
             print("-" * 95)
@@ -481,10 +447,7 @@ class StegoAutomatedTester:
                 rel_pct = (bits / base_bits) * 100
                 print(f"{method:<20} | {bits:>17,} | {bpp:>9.4f} | {chars:>11,} | {rel_pct:>9.1f}%")
             print("="*95)
-            print("ℹ️  bpp = bits per pixel (normalisasi terhadap ukuran gambar)")
-            print("ℹ️  Untuk publikasi, gunakan bits dan bpp sebagai metrik utama\n")
             
-            # Grafik Payload
             plt.figure(figsize=(14, 5))
             
             plt.subplot(1, 2, 1)
@@ -511,7 +474,6 @@ class StegoAutomatedTester:
             plt.savefig('result_payload_quality.png', dpi=150)
             print("   > Grafik disimpan: result_payload_quality.png")
         
-        # ✅ 2. ROBUSTNESS TEST
         if len(self.results_robustness) > 0:
             df_rob = pd.DataFrame(self.results_robustness)
             
@@ -535,13 +497,11 @@ class StegoAutomatedTester:
             plt.savefig('result_robustness_comprehensive.png', dpi=150)
             print("   > Grafik disimpan: result_robustness_comprehensive.png")
             
-            # Print full results table
             print("\n" + "="*85)
-            print("=== RINGKASAN HASIL UJI KETAHANAN ===")
+            print("=== RINGKASAN ROBUSTNESS ===")
             print("="*85)
             print(df_rob.to_string(index=False))
             
-            # Winner statistics
             print("\n" + "="*50)
             print("=== STATISTIK PEMENANG ===")
             print("="*50)
@@ -550,14 +510,12 @@ class StegoAutomatedTester:
                 pct = (count / len(df_rob)) * 100
                 print(f"{method:<15}: {count:>3} wins ({pct:>5.1f}%)")
             
-            # Overall statistics dengan mapping yang BENAR
             print("\n" + "="*90)
-            print("=== STATISTIK KESELURUHAN (Metrik Akademik) ===")
+            print("=== STATISTIK KESELURUHAN ===")
             print("="*90)
             print(f"{'Method':<20} | {'Cap (bits)':<12} | {'bpp':<10} | {'Avg BER':<10} | {'Win Rate':<10}")
             print("-" * 90)
             
-            # GUNAKAN MAPPING DICT YANG BENAR
             method_mapping = {
                 'Standard Edge': ('Std', self.capacity_std_bits, self.bpp_std),
                 'Clustered Edge': ('Clu', self.capacity_clu_bits, self.bpp_clu),
@@ -570,12 +528,7 @@ class StegoAutomatedTester:
                 print(f"{method_name:<20} | {bits:>11,} | {bpp:>9.4f} | {avg_ber:>9.2f}% | {win_rate:>9.1f}%")
             
             print("="*90)
-            print("ℹ️  Metrik untuk paper: Capacity (bits), bpp, BER (%), PSNR (dB), SSIM")
 
-
-# =============================================================================
-# MAIN EXECUTION
-# =============================================================================
 
 if __name__ == "__main__":
     print(f"Memulai Pengujian Otomatis pada: {TEST_IMAGE_PATH}")
@@ -588,4 +541,4 @@ if __name__ == "__main__":
     
     tester.visualize_results()
     
-    print("\n✅ PENGUJIAN SELESAI. Silakan cek file PNG yang dihasilkan.")
+    print("\nPENGUJIAN SELESAI. Silakan cek file PNG yang dihasilkan.")

@@ -3,21 +3,10 @@ from PIL import Image
 
 
 class EdgeDetection:
-    """
-    Kelas untuk melakukan edge detection menggunakan metode Sobel
-    """
+    # Edge detection menggunakan metode Sobel
 
     @staticmethod
     def apply_sobel(image_array):
-        """
-        Menerapkan Sobel edge detection pada gambar
-
-        Args:
-            image_array: Array numpy dari gambar (grayscale)
-
-        Returns:
-            Array numpy dengan edge magnitude
-        """
         # Sobel kernels
         sobel_x = np.array([
             [-1, 0, 1],
@@ -35,61 +24,39 @@ class EdgeDetection:
         gradient_x = np.zeros_like(image_array, dtype=float)
         gradient_y = np.zeros_like(image_array, dtype=float)
 
-        # Konvolusi dengan Sobel kernel
         for y in range(1, height - 1):
             for x in range(1, width - 1):
-                # Ambil neighborhood 3x3
                 region = image_array[y-1:y+2, x-1:x+2]
-
-                # Hitung gradient
                 gradient_x[y, x] = np.sum(region * sobel_x)
                 gradient_y[y, x] = np.sum(region * sobel_y)
 
-        # Hitung magnitude
         magnitude = np.sqrt(gradient_x**2 + gradient_y**2)
 
         return magnitude
 
     @staticmethod
     def get_edge_pixels(image_path, threshold=50):
-        """
-        Mendapatkan koordinat pixel-pixel yang merupakan edge
-
-        Args:
-            image_path: Path ke gambar
-            threshold: Threshold untuk menentukan edge (default: 50)
-
-        Returns:
-            tuple: (success: bool, result: list of (x, y) coordinates atau error message)
-        """
         try:
-            # Buka gambar
             img = Image.open(image_path)
 
-            # --- STABILISASI EDGE DETECTION ---
-            # Konversi ke RGB dan mask lowest 3 bits untuk robustness terhadap LSB modification
+            # Stabilisasi edge detection - mask LSB
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
             arr_rgb = np.array(img)
-            arr_rgb = arr_rgb & 0xF8 # Mask 3 bit terbawah (0-7 jadi 0)
+            arr_rgb = arr_rgb & 0xF8
             img_masked = Image.fromarray(arr_rgb)
             
-            # Convert ke grayscale dari image yang sudah dimask
             gray_img = img_masked.convert('L')
             img_array = np.array(gray_img)
 
-            # Terapkan Sobel
             edge_magnitude = EdgeDetection.apply_sobel(img_array)
 
-            # Normalize ke range 0-255
-            # Handle division by zero just in case
             m_max = edge_magnitude.max()
             if m_max == 0: m_max = 1
             
             edge_magnitude = (edge_magnitude / m_max * 255).astype(np.uint8)
 
-            # Ambil koordinat pixel yang merupakan edge (magnitude > threshold)
             edge_coords = []
             height, width = edge_magnitude.shape
 
@@ -107,22 +74,9 @@ class EdgeDetection:
 
     @staticmethod
     def visualize_edges(image_path, output_path, threshold=50):
-        """
-        Membuat visualisasi edge detection dan menyimpannya
-
-        Args:
-            image_path: Path ke gambar input
-            output_path: Path untuk menyimpan hasil visualisasi
-            threshold: Threshold untuk edge detection
-
-        Returns:
-            tuple: (success: bool, message: str)
-        """
         try:
-            # Buka gambar
             img = Image.open(image_path)
 
-            # --- STABILISASI EDGE DETECTION ---
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
@@ -130,23 +84,18 @@ class EdgeDetection:
             arr_rgb = arr_rgb & 0xF8
             img_masked = Image.fromarray(arr_rgb)
             
-            # Convert ke grayscale
             gray_img = img_masked.convert('L')
             img_array = np.array(gray_img)
 
-            # Terapkan Sobel
             edge_magnitude = EdgeDetection.apply_sobel(img_array)
 
-            # Normalize ke range 0-255
             m_max = edge_magnitude.max()
             if m_max == 0: m_max = 1
             
             edge_magnitude = (edge_magnitude / m_max * 255).astype(np.uint8)
 
-            # Apply threshold
             edge_binary = np.where(edge_magnitude > threshold, 255, 0).astype(np.uint8)
 
-            # Simpan hasil
             edge_img = Image.fromarray(edge_binary)
             edge_img.save(output_path)
 
@@ -159,16 +108,6 @@ class EdgeDetection:
 
     @staticmethod
     def get_edge_statistics(image_path, threshold=50):
-        """
-        Mendapatkan statistik edge dalam gambar
-
-        Args:
-            image_path: Path ke gambar
-            threshold: Threshold untuk edge detection
-
-        Returns:
-            tuple: (success: bool, stats: dict atau error message)
-        """
         try:
             img = Image.open(image_path)
             width, height = img.size
@@ -182,10 +121,8 @@ class EdgeDetection:
             edge_count = len(edge_coords)
             edge_percentage = (edge_count / total_pixels) * 100
 
-            # Hitung kapasitas untuk steganography
-            # Setiap edge pixel bisa menyimpan 3 bit (RGB)
             max_bits = edge_count * 3
-            max_chars = max_bits // 8 - 7  # Kurangi delimiter
+            max_chars = max_bits // 8 - 7
 
             stats = {
                 'total_pixels': total_pixels,

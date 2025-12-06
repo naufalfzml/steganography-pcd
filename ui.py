@@ -9,7 +9,6 @@ from evaluation import Evaluation
 
 
 def print_header():
-    """Menampilkan header program"""
     print("\n" + "="*50)
     print("    PROGRAM STEGANOGRAPHY GAMBAR")
     print("    Metode: LSB (Least Significant Bit)")
@@ -17,42 +16,34 @@ def print_header():
 
 
 def print_success(message):
-    """Menampilkan pesan sukses"""
-    print(f"✓ {message}")
+    print(f"[OK] {message}")
 
 
 def print_error(message):
-    """Menampilkan pesan error"""
-    print(f"✗ {message}")
+    print(f"[ERROR] {message}")
 
 
 def encode_menu():
-    """Menu untuk encode (sembunyikan pesan)"""
     print("\n--- ENCODE: Sembunyikan Pesan ---")
 
-    # Input path gambar
     image_path = input("Path gambar input: ").strip()
 
     if not os.path.exists(image_path):
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    # Cek kapasitas gambar
     success, result = Steganography.get_image_capacity(image_path)
     if success:
-        print(f"ℹ Kapasitas maksimal: {result} karakter")
+        print(f"Kapasitas maksimal: {result} karakter")
 
-    # Input pesan
     message = input("Masukkan pesan yang ingin disembunyikan: ")
 
     if success and len(message) > result:
         print_error(f"Pesan terlalu panjang! Maksimal {result} karakter, Anda memasukkan {len(message)} karakter.")
         return
 
-    # Input output path
     output_path = input("Path untuk menyimpan gambar hasil (contoh: output.png): ").strip()
 
-    # Proses encode
     print("\nMemproses...")
     success, msg = Steganography.encode_message(image_path, message, output_path)
 
@@ -63,17 +54,14 @@ def encode_menu():
 
 
 def decode_menu():
-    """Menu untuk decode (ekstrak pesan)"""
     print("\n--- DECODE: Ekstrak Pesan ---")
 
-    # Input path gambar
     image_path = input("Path gambar yang berisi pesan tersembunyi: ").strip()
 
     if not os.path.exists(image_path):
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    # Proses decode
     print("\nMemproses...")
     success, message = Steganography.decode_message(image_path)
 
@@ -88,17 +76,14 @@ def decode_menu():
 
 
 def capacity_menu():
-    """Menu untuk cek kapasitas gambar"""
     print("\n--- CEK KAPASITAS GAMBAR ---")
 
-    # Input path gambar
     image_path = input("Path gambar: ").strip()
 
     if not os.path.exists(image_path):
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    # Cek kapasitas
     success, result = Steganography.get_image_capacity(image_path)
 
     if success:
@@ -111,17 +96,14 @@ def capacity_menu():
 
 
 def encode_edge_menu():
-    """Menu untuk encode menggunakan edge-based steganography"""
     print("\n--- ENCODE (EDGE-BASED): Sembunyikan Pesan di Edge ---")
 
-    # Input path gambar
     image_path = input("Path gambar input: ").strip()
 
     if not os.path.exists(image_path):
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    # Input threshold
     threshold_input = input("Threshold edge detection (range: 0-255): ").strip()
     threshold = 50
     if threshold_input:
@@ -133,50 +115,43 @@ def encode_edge_menu():
         except ValueError:
             print_error("Input tidak valid. Menggunakan default: 50")
 
-    # Cek kapasitas edge
     print("\nMenganalisis edge gambar...")
     success, result = SteganographyEdge.get_capacity(image_path, threshold)
 
     if success:
-        print(f"ℹ Edge pixels: {result['edge_pixels']} ({result['edge_percentage']:.2f}% dari total)")
-        print(f"ℹ Kapasitas maksimal: {result['max_chars']} karakter")
+        print(f"Edge pixels: {result['edge_pixels']} ({result['edge_percentage']:.2f}% dari total)")
+        print(f"Kapasitas maksimal: {result['max_chars']} karakter")
     else:
         print_error(result)
         return
 
-    # Input pesan
     message = input("\nMasukkan pesan yang ingin disembunyikan: ")
 
     if success and len(message) > result['max_chars']:
         print_error(f"Pesan terlalu panjang! Maksimal {result['max_chars']} karakter.")
         return
 
-    # Input output path
     output_path = input("Path untuk menyimpan gambar hasil (contoh: output_edge.png): ").strip()
 
-    # Proses encode
     print("\nMemproses...")
     success, msg = SteganographyEdge.encode_message(image_path, message, output_path, threshold)
 
     if success:
         print_success(msg)
-        print(f"ℹ Threshold yang digunakan: {threshold} (INGAT ini untuk decode!)")
+        print(f"Threshold yang digunakan: {threshold} (INGAT ini untuk decode!)")
     else:
         print_error(msg)
 
 
 def decode_edge_menu():
-    """Menu untuk decode edge-based steganography"""
     print("\n--- DECODE (EDGE-BASED): Ekstrak Pesan dari Edge ---")
 
-    # Input path gambar
     image_path = input("Path gambar yang berisi pesan tersembunyi: ").strip()
 
     if not os.path.exists(image_path):
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    # Input threshold (harus sama dengan saat encode!)
     threshold_input = input("Threshold edge detection (harus sama dengan saat encode, default: 50): ").strip()
     threshold = 50
     if threshold_input:
@@ -188,7 +163,6 @@ def decode_edge_menu():
         except ValueError:
             print_error("Input tidak valid. Menggunakan default: 50")
 
-    # Proses decode
     print("\nMemproses...")
     success, message = SteganographyEdge.decode_message(image_path, threshold)
 
@@ -203,17 +177,14 @@ def decode_edge_menu():
 
 
 def visualize_edge_menu():
-    """Menu untuk visualisasi edge detection"""
     print("\n--- VISUALISASI EDGE DETECTION ---")
 
-    # Input path gambar
     image_path = input("Path gambar: ").strip()
 
     if not os.path.exists(image_path):
         print_error(f"File '{image_path}' tidak ditemukan!")
         return
 
-    # Input threshold
     threshold_input = input("Threshold edge detection : ").strip()
     threshold = 50
     if threshold_input:
@@ -225,17 +196,14 @@ def visualize_edge_menu():
         except ValueError:
             print_error("Input tidak valid. Menggunakan default: 50")
 
-    # Input output path
     output_path = input("Path untuk menyimpan visualisasi edge (contoh: edge_visual.png): ").strip()
 
-    # Proses visualisasi
     print("\nMemproses...")
     success, msg = EdgeDetection.visualize_edges(image_path, output_path, threshold)
 
     if success:
         print_success(msg)
 
-        # Tampilkan statistik
         success_stats, stats = EdgeDetection.get_edge_statistics(image_path, threshold)
         if success_stats:
             print(f"\nStatistik Edge:")
@@ -247,7 +215,6 @@ def visualize_edge_menu():
 
 
 def cluster_visualization_menu():
-    """Menu visualisasi clustering"""
     print("\n--- VISUALISASI CLUSTERING EDGE ---")
 
     image_path = input("Path gambar: ").strip()
@@ -268,7 +235,6 @@ def cluster_visualization_menu():
     if success:
         print_success(msg)
 
-        # Tampilkan statistik
         success_stat, result = EdgeClustering.cluster_edge_pixels(
             image_path, threshold, eps, min_samples
         )
@@ -287,7 +253,6 @@ def cluster_visualization_menu():
 
 
 def encode_clustered_menu():
-    """Menu encode dengan clustering (Adaptive)"""
     print("\n--- ENCODE (ADAPTIVE EDGE): Sembunyikan Pesan di Edge ---")
 
     image_path = input("Path gambar input: ").strip()
@@ -314,8 +279,8 @@ def encode_clustered_menu():
     if success:
         pixel_type = "isolated" if use_isolated else "grouped"
         percentage = result.get('edge_percentage', 0)
-        print(f"ℹ Edge pixels ({pixel_type}): {result.get('edge_pixels', 'N/A')} ({percentage:.2f}% dari total)")
-        print(f"ℹ Kapasitas maksimal: {result.get('max_chars', 'N/A')} karakter (mode: {result.get('mode', 'N/A')})")
+        print(f"Edge pixels ({pixel_type}): {result.get('edge_pixels', 'N/A')} ({percentage:.2f}% dari total)")
+        print(f"Kapasitas maksimal: {result.get('max_chars', 'N/A')} karakter (mode: {result.get('mode', 'N/A')})")
     else:
         print_error(result)
         return
@@ -335,14 +300,13 @@ def encode_clustered_menu():
 
     if success:
         print_success(msg)
-        print(f"ℹ Parameter: th={threshold}, eps={eps}, ms={min_samples}, iso={use_isolated}, var_p={variance_percentile}")
+        print(f"Parameter: th={threshold}, eps={eps}, ms={min_samples}, iso={use_isolated}, var_p={variance_percentile}")
         print("  INGAT parameter ini untuk decode!")
     else:
         print_error(msg)
 
 
 def decode_clustered_menu():
-    """Menu decode dengan clustering"""
     print("\n--- DECODE (CLUSTERED EDGE): Ekstrak Pesan dari Clustered Edge ---")
 
     image_path = input("Path gambar: ").strip()
@@ -377,7 +341,6 @@ def decode_clustered_menu():
 
 
 def compare_methods_menu():
-    """Menu perbandingan 3 metode"""
     print("\n--- PERBANDINGAN: Edge vs Clustered Edge vs Adaptive Edge ---")
     print("\nProses ini akan:")
     print("1. Encode pesan dengan metode Edge-Based (standar)")
@@ -406,12 +369,10 @@ def compare_methods_menu():
     use_isolated = (pixel_choice == '2')
     pixel_type_str = "Isolated" if use_isolated else "Grouped"
 
-    # Temporary files
     stego_edge = "temp_stego_edge.png"
     stego_clustered = "temp_stego_clustered.png"
     stego_adaptive = "temp_stego_adaptive.png"
 
-    # --- 1. Edge-Based ---
     print("\n--- 1. Metode Edge-Based ---")
     success1, msg1 = SteganographyEdge.encode_message(
         original_image, message, stego_edge, threshold
@@ -419,7 +380,6 @@ def compare_methods_menu():
     if success1: print_success("Encode Edge-Based berhasil")
     else: print_error(f"Encode Edge-Based gagal: {msg1}")
 
-    # --- 2. Clustered Edge ---
     print(f"\n--- 2. Metode Clustered Edge ({pixel_type_str}) ---")
     success2, msg2 = SteganographyEdgeClustered.encode_message(
         original_image, message, stego_clustered, threshold, eps, min_samples, use_isolated
@@ -427,7 +387,6 @@ def compare_methods_menu():
     if success2: print_success("Encode Clustered Edge berhasil")
     else: print_error(f"Encode Clustered Edge gagal: {msg2}")
 
-    # --- 3. Adaptive Edge ---
     print(f"\n--- 3. Metode Adaptive Edge ({pixel_type_str}) ---")
     success3, msg3 = SteganographyEdgeAdaptive.encode_message(
         original_image, message, stego_adaptive, threshold, eps, min_samples, use_isolated, variance_percentile
@@ -435,24 +394,20 @@ def compare_methods_menu():
     if success3: print_success("Encode Adaptive Edge berhasil")
     else: print_error(f"Encode Adaptive Edge gagal: {msg3}")
 
-    # --- Evaluasi ---
     print("\n--- Evaluasi & Hasil ---")
     print(f"{'METODE':<20} | {'PSNR (dB)':<15} | {'BER (%)':<15} | {'KAPASITAS (est)':<15}")
     print("-" * 75)
 
-    # Eval Edge
     if success1 and os.path.exists(stego_edge):
         s_dec, decoded = SteganographyEdge.decode_message(stego_edge, threshold)
         psnr = Evaluation.calculate_psnr(original_image, stego_edge)[1]
         ber = Evaluation.calculate_ber(message, decoded)[1]['ber_percentage']
-        # Estimate capacity
         _, cap = SteganographyEdge.get_capacity(original_image, threshold)
         cap_val = cap.get('max_chars', 0)
         print(f"{'Edge-Based':<20} | {psnr:<15.2f} | {ber:<15.4f} | {cap_val:<15}")
     else:
         print(f"{'Edge-Based':<20} | {'Gagal':<15} | {'Gagal':<15} | {'-':<15}")
 
-    # Eval Clustered
     if success2 and os.path.exists(stego_clustered):
         s_dec, decoded = SteganographyEdgeClustered.decode_message(stego_clustered, threshold, eps, min_samples, use_isolated)
         psnr = Evaluation.calculate_psnr(original_image, stego_clustered)[1]
@@ -463,7 +418,6 @@ def compare_methods_menu():
     else:
         print(f"{'Clustered Edge':<20} | {'Gagal':<15} | {'Gagal':<15} | {'-':<15}")
 
-    # Eval Adaptive
     if success3 and os.path.exists(stego_adaptive):
         s_dec, decoded = SteganographyEdgeAdaptive.decode_message(stego_adaptive, threshold, eps, min_samples, use_isolated)
         psnr = Evaluation.calculate_psnr(original_image, stego_adaptive)[1]
@@ -474,13 +428,11 @@ def compare_methods_menu():
     else:
         print(f"{'Adaptive Edge':<20} | {'Gagal':<15} | {'Gagal':<15} | {'-':<15}")
 
-    # Cleanup
     for f in [stego_edge, stego_clustered, stego_adaptive]:
         if os.path.exists(f): os.remove(f)
 
 
 def robustness_test_menu():
-    """Menu pengujian robustness dengan Salt & Pepper Noise"""
     print("\n--- PENGUJIAN ROBUSTNESS (Salt & Pepper Noise) ---")
     print("Pengujian ketahanan pesan terhadap noise")
 
@@ -491,7 +443,6 @@ def robustness_test_menu():
 
     message = input("Pesan yang akan di-test: ")
     
-    # ✅ TAMBAHAN: Input noise level
     noise_input = input("Noise level (0.0-1.0, default 0.01 untuk 1%): ").strip()
     noise_level = 0.01
     if noise_input:
@@ -503,7 +454,7 @@ def robustness_test_menu():
         except ValueError:
             print_error("Input tidak valid. Menggunakan default: 0.01")
     
-    print(f"\nℹ Noise level: {noise_level*100:.1f}%")
+    print(f"\nNoise level: {noise_level*100:.1f}%")
     
     print("\nPilih Algoritma:")
     print("1. Edge-Based (Standard)")
@@ -532,12 +483,10 @@ def robustness_test_menu():
     if algo_choice == '3':
         variance_percentile = int(input("Variance Percentile (default 90): ").strip() or 90)
 
-    # Temp files
     stego_path = "temp_robust_stego.png"
     noisy_path = "temp_robust_noisy.png"
     
     try:
-        # 1. Encode
         print("\n1. Encoding pesan...")
         success_enc = False
         msg_enc = ""
@@ -563,7 +512,6 @@ def robustness_test_menu():
             return
         print_success("Encode berhasil")
 
-        # 2. Add Noise (SEKARANG LEBIH REALISTIS!)
         print(f"\n2. Menambahkan Salt & Pepper Noise ({noise_level*100:.1f}%)...")
         success_noise, msg_noise = Evaluation.add_salt_and_pepper_noise(
             stego_path, noisy_path, noise_level, random_seed=42
@@ -571,9 +519,8 @@ def robustness_test_menu():
         if not success_noise:
             print_error(f"Gagal menambah noise: {msg_noise}")
             return
-        print_success(msg_noise)  # ← Tampilkan detail statistik noise
+        print_success(msg_noise)
 
-        # 3. Decode
         print("\n3. Decoding pesan dari gambar bernoise...")
         success_dec = False
         decoded_message = ""
@@ -589,7 +536,6 @@ def robustness_test_menu():
                 noisy_path, threshold, eps, min_samples, use_isolated
             )
 
-        # 4. Result
         print("\n" + "="*60)
         print("HASIL PENGUJIAN ROBUSTNESS")
         print("-"*60)
@@ -610,18 +556,16 @@ def robustness_test_menu():
                 print("Gagal menghitung BER")
         else:
             print(f"Pesan Decode    : [GAGAL] {decoded_message}")
-            print("\n⚠ Decode gagal! Pesan tidak dapat di-extract dari gambar bernoise.")
+            print("\nDecode gagal! Pesan tidak dapat di-extract dari gambar bernoise.")
             
         print("="*60)
 
     finally:
-        # Cleanup
         if os.path.exists(stego_path): os.remove(stego_path)
         if os.path.exists(noisy_path): os.remove(noisy_path)
 
 
 def display_menu():
-    """Menampilkan menu utama"""
     print("\n=== METODE STEGANOGRAPHY ===")
     print("\nA. Standard LSB Steganography:")
     print("1. Sembunyikan pesan dalam gambar (Encode)")
@@ -643,7 +587,6 @@ def display_menu():
 
 
 def run():
-    """Fungsi utama untuk menjalankan program"""
     while True:
         print_header()
         display_menu()

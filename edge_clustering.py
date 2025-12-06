@@ -6,33 +6,16 @@ from edge_detection import EdgeDetection
 
 
 class EdgeClustering:
-    """
-    Kelas untuk clustering edge pixels menggunakan DBSCAN
-    Tujuan: Mengelompokkan edge pixels yang berdekatan untuk optimasi steganography
-    """
+    # Clustering edge pixels menggunakan DBSCAN
 
     @staticmethod
     def cluster_edge_pixels(image_path, threshold=50, eps=6, min_samples=20):
-        """
-        Clustering edge pixels menggunakan DBSCAN dengan feature tambahan (grayscale intensity)
-
-        Args:
-            image_path: Path ke gambar
-            threshold: Threshold untuk edge detection (default: 50)
-            eps: Maximum distance between two samples (default: 6, optimal untuk edge)
-            min_samples: Minimum samples in a neighborhood (default: 20, optimal untuk edge)
-
-        Returns:
-            tuple: (success: bool, result: dict atau error message)
-        """
         try:
-            # Validasi parameter
             if eps <= 0 or min_samples < 2:
                 return False, "Parameter DBSCAN tidak valid (eps > 0, min_samples >= 2)"
             if threshold < 0 or threshold > 255:
                 return False, "Threshold harus antara 0-255"
 
-            # Dapatkan edge pixels
             success, edge_coords = EdgeDetection.get_edge_pixels(image_path, threshold)
 
             if not success:
@@ -41,20 +24,19 @@ class EdgeClustering:
             if len(edge_coords) == 0:
                 return False, f"Tidak ada edge ditemukan dengan threshold {threshold}"
 
-            # Buka gambar untuk mendapatkan grayscale value (ROBUST - MSB ONLY)
+            # Masking untuk konsistensi
             img = Image.open(image_path)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
                 
             arr_rgb = np.array(img)
-            arr_rgb = arr_rgb & 0xF8 # Mask lowest 3 bits untuk konsistensi
+            arr_rgb = arr_rgb & 0xF8
             img_masked = Image.fromarray(arr_rgb)
             
             img_gray = img_masked.convert('L')
             img_array = np.array(img_gray)
 
-            # Tambahkan grayscale value sebagai feature ketiga
-            # Format: [[x1, y1, gray1], [x2, y2, gray2], ...]
+            # Tambahkan grayscale value sebagai feature
             coordinates_with_intensity = []
             for x, y in edge_coords:
                 gray_value = img_array[y, x]
@@ -62,22 +44,17 @@ class EdgeClustering:
 
             coordinates_array = np.array(coordinates_with_intensity)
 
-            # Normalisasi features agar spatial dan intensity seimbang
             scaler = StandardScaler()
             coordinates_scaled = scaler.fit_transform(coordinates_array)
 
-            # Set random seed untuk konsistensi
             np.random.seed(42)
 
-            # Terapkan DBSCAN
             dbscan = DBSCAN(eps=eps, min_samples=min_samples)
             labels = dbscan.fit_predict(coordinates_scaled)
 
-            # Analisis hasil clustering
             n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
             n_noise = list(labels).count(-1)
 
-            # Pisahkan edge pixels yang ter-cluster vs noise
             clustered_coords = []
             noise_coords = []
 
@@ -88,14 +65,12 @@ class EdgeClustering:
                 else:
                     clustered_coords.append(coord)
 
-            # CRITICAL: Sort untuk konsistensi urutan
             clustered_coords.sort()
             noise_coords.sort()
 
-            # Hitung statistik per cluster
             cluster_stats = {}
             for label in set(labels):
-                if label == -1:  # Skip noise
+                if label == -1:
                     continue
                 cluster_size = list(labels).count(label)
                 cluster_stats[label] = cluster_size
@@ -122,20 +97,6 @@ class EdgeClustering:
 
     @staticmethod
     def get_optimized_edge_pixels(image_path, threshold=50, eps=6, min_samples=20, use_isolated=False):
-        """
-        Mendapatkan edge pixels yang sudah dioptimasi dengan clustering
-
-        Args:
-            image_path: Path ke gambar
-            threshold: Threshold untuk edge detection
-            eps: DBSCAN eps parameter
-            min_samples: DBSCAN min_samples parameter
-            use_isolated: Jika True, hanya gunakan isolated edge pixels (noise, lebih aman)
-                         Jika False, hanya gunakan grouped edge pixels (clustered, kapasitas lebih besar)
-
-        Returns:
-            tuple: (success: bool, result: list of (x,y) atau error message)
-        """
         success, cluster_result = EdgeClustering.cluster_edge_pixels(
             image_path, threshold, eps, min_samples
         )
@@ -144,12 +105,8 @@ class EdgeClustering:
             return False, cluster_result
 
         if use_isolated:
-            # Gunakan noise pixels (isolated edges)
-            # Lebih aman karena edge yang terisolasi lebih sulit dideteksi
             coords = cluster_result['noise_coords']
         else:
-            # Gunakan clustered pixels (grouped edges)
-            # Lebih banyak kapasitas
             coords = cluster_result['clustered_coords']
 
         if len(coords) == 0:
@@ -160,21 +117,7 @@ class EdgeClustering:
 
     @staticmethod
     def visualize_clusters(image_path, output_path, threshold=50, eps=6, min_samples=20):
-        """
-        Visualisasi hasil clustering dengan warna berbeda per cluster
-
-        Args:
-            image_path: Path ke gambar
-            output_path: Path untuk save visualisasi
-            threshold: Threshold edge detection
-            eps: DBSCAN eps
-            min_samples: DBSCAN min_samples
-
-        Returns:
-            tuple: (success: bool, message: str dengan statistik)
-        """
         try:
-            # Clustering
             success, result = EdgeClustering.cluster_edge_pixels(
                 image_path, threshold, eps, min_samples
             )
@@ -182,36 +125,28 @@ class EdgeClustering:
             if not success:
                 return False, result
 
-            # Buka gambar untuk dimensi
             img = Image.open(image_path)
             width, height = img.size
 
-            # Buat canvas RGB untuk visualisasi warna
             canvas = np.zeros((height, width, 3), dtype=np.uint8)
 
-            # Generate warna untuk setiap cluster
             n_clusters = result['n_clusters']
-            np.random.seed(42)  # Konsistensi warna
+            np.random.seed(42)
             colors = np.random.randint(50, 255, size=(max(n_clusters, 1), 3))
 
-            # Gambar edge pixels dengan warna cluster
             labels = result['labels']
             all_coords = result['all_coords']
 
             for i, (x, y) in enumerate(all_coords):
                 label = labels[i]
                 if label == -1:
-                    # Noise = merah
                     canvas[y, x] = [255, 0, 0]
                 else:
-                    # Cluster = warna random
                     canvas[y, x] = colors[label % len(colors)]
 
-            # Save
             img_result = Image.fromarray(canvas)
             img_result.save(output_path)
 
-            # Return dengan statistik lengkap
             stats_msg = (
                 f"Visualisasi berhasil disimpan di: {output_path}\n"
                 f"Total edge pixels: {result['total_edge_pixels']}\n"
@@ -227,19 +162,6 @@ class EdgeClustering:
 
     @staticmethod
     def get_capacity_clustered(image_path, threshold=50, eps=6, min_samples=20, use_isolated=False):
-        """
-        Hitung kapasitas steganography dengan clustering
-
-        Args:
-            image_path: Path ke gambar
-            threshold: Threshold edge detection
-            eps: DBSCAN eps
-            min_samples: DBSCAN min_samples
-            use_isolated: True = gunakan isolated pixels, False = gunakan grouped pixels
-
-        Returns:
-            tuple: (success: bool, result: dict atau error message)
-        """
         success, coords = EdgeClustering.get_optimized_edge_pixels(
             image_path, threshold, eps, min_samples, use_isolated
         )
@@ -247,15 +169,12 @@ class EdgeClustering:
         if not success:
             return False, coords
 
-        # Hitung kapasitas
         edge_count = len(coords)
-        max_bits = edge_count * 3  # RGB = 3 bit per pixel
+        max_bits = edge_count * 3
         
-        # Gunakan length prefix (16 bits) instead of delimiter
-        max_bits_available = max_bits - 16  # Reserve 16 bits for length
+        max_bits_available = max_bits - 16
         max_chars = max_bits_available // 8
 
-        # Get total pixels
         img = Image.open(image_path)
         width, height = img.size
         total_pixels = width * height
@@ -277,18 +196,6 @@ class EdgeClustering:
 
     @staticmethod
     def get_cluster_info(image_path, threshold=50, eps=6, min_samples=20):
-        """
-        Mendapatkan informasi detail tentang clustering
-
-        Args:
-            image_path: Path ke gambar
-            threshold: Threshold edge detection
-            eps: DBSCAN eps
-            min_samples: DBSCAN min_samples
-
-        Returns:
-            tuple: (success: bool, info: dict)
-        """
         success, result = EdgeClustering.cluster_edge_pixels(
             image_path, threshold, eps, min_samples
         )
