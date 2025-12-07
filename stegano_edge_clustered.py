@@ -3,40 +3,19 @@ from edge_clustering import EdgeClustering
 
 
 class SteganographyEdgeClustered:
-    """
-    Steganography berbasis edge dengan DBSCAN clustering
-    Optimasi: Hanya gunakan edge pixels yang ter-cluster atau isolated
-    """
+    # Steganography berbasis edge dengan DBSCAN clustering
 
     @staticmethod
     def encode_message(image_path, message, output_path, threshold=50,
-                       eps=3, min_samples=5, use_noise=False):
-        """
-        Encode pesan menggunakan edge pixels yang sudah di-clustering
-
-        Args:
-            image_path: Path gambar input
-            message: Pesan yang akan disembunyikan
-            output_path: Path output
-            threshold: Threshold edge detection
-            eps: DBSCAN eps parameter
-            min_samples: DBSCAN min_samples parameter
-            use_noise: True = gunakan noise pixels, False = gunakan clustered pixels
-
-        Returns:
-            tuple: (success: bool, message: str)
-        """
+                       eps=6, min_samples=20, use_isolated=False):
         try:
-            # Buka gambar
             img = Image.open(image_path)
 
-            # Convert RGB
             if img.mode != 'RGB':
                 img = img.convert('RGB')
 
-            # Dapatkan optimized edge pixels
             success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
-                image_path, threshold, eps, min_samples, use_noise
+                image_path, threshold, eps, min_samples, use_isolated
             )
 
             if not success:
@@ -45,40 +24,46 @@ class SteganographyEdgeClustered:
             if len(edge_coords) == 0:
                 return False, "Tidak ada edge pixels yang sesuai kriteria"
 
-            # Encode
             encoded_img = img.copy()
 
-            # Tambah delimiter
-            message += "<<END>>"
-            message_bits = ''.join([format(ord(char), '08b') for char in message])
+            message_bits_data = ''.join([format(ord(char), '08b') for char in message])
+            
+            message_length = len(message)
+            length_bits = format(message_length, '032b') 
+            message_bits = length_bits + message_bits_data
 
-            # Validasi kapasitas
             max_bits = len(edge_coords) * 3
             if len(message_bits) > max_bits:
-                max_chars = max_bits // 8 - 7
+                max_chars = (max_bits - 32) // 8
                 return False, f"Pesan terlalu panjang! Maksimal {max_chars} karakter."
 
-            # Embed ke edge pixels
             data_index = 0
+            pixels_modified = 0
+            
             for x, y in edge_coords:
                 if data_index >= len(message_bits):
                     break
 
                 pixel = list(img.getpixel((x, y)))
 
-                # Modifikasi LSB
                 for i in range(3):
                     if data_index < len(message_bits):
-                        pixel[i] = pixel[i] & ~1 | int(message_bits[data_index])
+                        pixel[i] = (pixel[i] & ~1) | int(message_bits[data_index])
                         data_index += 1
 
                 encoded_img.putpixel((x, y), tuple(pixel))
+                pixels_modified += 1
 
-            # Save
             encoded_img.save(output_path)
 
-            cluster_type = "noise (isolated)" if use_noise else "clustered (grouped)"
-            return True, f"Pesan berhasil disembunyikan di {data_index // 3} {cluster_type} edge pixels! Gambar disimpan di: {output_path}"
+            pixel_type = "isolated" if use_isolated else "grouped"
+            return True, (
+                f"Pesan berhasil disembunyikan!\n"
+                f"- Pixels modified: {pixels_modified} {pixel_type} edge pixels\n"
+                f"- Message length: {message_length} characters\n"
+                f"- Bits embedded: {len(message_bits)} bits\n"
+                f"- Output: {output_path}"
+            )
 
         except FileNotFoundError:
             return False, f"File '{image_path}' tidak ditemukan!"
@@ -86,31 +71,15 @@ class SteganographyEdgeClustered:
             return False, f"Error: {str(e)}"
 
     @staticmethod
-    def decode_message(image_path, threshold=50, eps=3, min_samples=5, use_noise=False):
-        """
-        Decode pesan dari edge pixels yang sudah di-clustering
-
-        Args:
-            image_path: Path gambar dengan pesan
-            threshold: Threshold edge detection (HARUS SAMA dengan encode)
-            eps: DBSCAN eps (HARUS SAMA dengan encode)
-            min_samples: DBSCAN min_samples (HARUS SAMA dengan encode)
-            use_noise: HARUS SAMA dengan encode
-
-        Returns:
-            tuple: (success: bool, message: str)
-        """
+    def decode_message(image_path, threshold=50, eps=6, min_samples=20, use_isolated=False, expected_length=None):
         try:
-            # Buka gambar
             img = Image.open(image_path)
 
-            # Convert RGB
             if img.mode != 'RGB':
                 img = img.convert('RGB')
 
-            # Dapatkan optimized edge pixels (HARUS SAMA URUTAN dengan encode!)
             success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
-                image_path, threshold, eps, min_samples, use_noise
+                image_path, threshold, eps, min_samples, use_isolated
             )
 
             if not success:
@@ -119,50 +88,105 @@ class SteganographyEdgeClustered:
             if len(edge_coords) == 0:
                 return False, "Tidak ada edge pixels yang sesuai kriteria"
 
-            # Ekstrak bit
             message_bits = []
 
             for x, y in edge_coords:
                 pixel = img.getpixel((x, y))
 
-                # Ambil LSB
                 for value in pixel:
                     message_bits.append(str(value & 1))
+            
+            # Mode robustness test
+            if expected_length is not None:
+                if len(message_bits) < 16:
+                    return False, "Tidak cukup data"
+                
+                message_bits_data = message_bits[16:]
+                target_bits = expected_length * 8
+                
+                bits_to_process = message_bits_data[:target_bits]
+                
+                message = ""
+                for i in range(0, len(bits_to_process), 8):
+                    byte = bits_to_process[i:i+8]
+                    if len(byte) == 8:
+                        char = chr(int(''.join(byte), 2))
+                        message += char
+                return True, message
 
-            # Convert ke karakter
+            # Normal decoding
+            if len(message_bits) < 32:
+                return False, "Tidak cukup data untuk decode"
+
+            length_bits = ''.join(message_bits[:32])
+            message_length = int(length_bits, 2)
+
+            if message_length == 0:
+                return False, "Tidak ada pesan ditemukan (length = 0)"
+
+            max_possible_chars = (len(message_bits) - 32) // 8
+            if message_length > max_possible_chars:
+                message_length = max_possible_chars
+
+            message_bits_data = message_bits[32:32 + (message_length * 8)]
+
             message = ""
-            for i in range(0, len(message_bits), 8):
-                byte = message_bits[i:i+8]
+            for i in range(0, len(message_bits_data), 8):
+                byte = message_bits_data[i:i+8]
                 if len(byte) == 8:
                     char = chr(int(''.join(byte), 2))
                     message += char
 
-                    # Cek delimiter
-                    if message.endswith("<<END>>"):
-                        return True, message[:-7]
-
-            return True, message if message else "Tidak ada pesan ditemukan!"
+            return True, message
 
         except FileNotFoundError:
             return False, f"File '{image_path}' tidak ditemukan!"
         except Exception as e:
             return False, f"Error: {str(e)}"
 
+
     @staticmethod
-    def get_capacity(image_path, threshold=50, eps=3, min_samples=5, use_noise=False):
-        """
-        Hitung kapasitas dengan clustering
-
-        Args:
-            image_path: Path gambar
-            threshold: Threshold edge detection
-            eps: DBSCAN eps
-            min_samples: DBSCAN min_samples
-            use_noise: True = noise pixels, False = clustered pixels
-
-        Returns:
-            tuple: (success: bool, result: dict)
-        """
+    def get_capacity(image_path, threshold=50, eps=6, min_samples=20, use_isolated=False):
         return EdgeClustering.get_capacity_clustered(
-            image_path, threshold, eps, min_samples, use_noise
+            image_path, threshold, eps, min_samples, use_isolated
         )
+
+    @staticmethod
+    def compare_capacity(image_path, threshold=50, eps=6, min_samples=20):
+        try:
+            success_grouped, cap_grouped = SteganographyEdgeClustered.get_capacity(
+                image_path, threshold, eps, min_samples, use_isolated=False
+            )
+
+            if not success_grouped:
+                return False, cap_grouped
+
+            success_isolated, cap_isolated = SteganographyEdgeClustered.get_capacity(
+                image_path, threshold, eps, min_samples, use_isolated=True
+            )
+
+            if not success_isolated:
+                return False, cap_isolated
+
+            comparison = {
+                'grouped_edges': {
+                    'pixels': cap_grouped['edge_pixels'],
+                    'percentage': cap_grouped['edge_percentage'],
+                    'max_chars': cap_grouped['max_chars']
+                },
+                'isolated_edges': {
+                    'pixels': cap_isolated['edge_pixels'],
+                    'percentage': cap_isolated['edge_percentage'],
+                    'max_chars': cap_isolated['max_chars']
+                },
+                'difference': {
+                    'pixels': cap_grouped['edge_pixels'] - cap_isolated['edge_pixels'],
+                    'max_chars': cap_grouped['max_chars'] - cap_isolated['max_chars']
+                },
+                'recommendation': 'Use grouped edges for higher capacity' if cap_grouped['max_chars'] > cap_isolated['max_chars'] * 2 else 'Use isolated edges for better security'
+            }
+
+            return True, comparison
+
+        except Exception as e:
+            return False, f"Error: {str(e)}"

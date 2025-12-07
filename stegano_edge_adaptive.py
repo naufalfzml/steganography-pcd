@@ -2,295 +2,263 @@ from PIL import Image
 import numpy as np
 from edge_clustering import EdgeClustering
 
-
 class SteganographyEdgeAdaptive:
-    """
-    Steganography dengan Adaptive Embedding berdasarkan cluster characteristics
-
-    Key Difference:
-    - Standard: Embed di semua edge pixels dengan intensitas sama
-    - Adaptive: Embed lebih banyak bit di edge dengan gradient tinggi (cluster besar)
-                Embed lebih sedikit bit di edge dengan gradient rendah (noise/cluster kecil)
-
-    Benefit:
-    - PSNR lebih tinggi karena perubahan di area dengan variasi tinggi
-    - BER lebih rendah karena embedding lebih robust di area stabil
-    """
+    # Steganography Adaptive dengan Block-Based Flagging
+    # Flag '1' = High Variance (2-bit), Flag '0' = Low Variance (1-bit)
+    
+    CHUNK_SIZE = 8
 
     @staticmethod
-    def calculate_edge_strength(image, x, y):
-        """
-        Hitung kekuatan edge di sekitar pixel (x, y)
-        Digunakan untuk menentukan berapa bit yang bisa di-embed
-
-        Args:
-            image: PIL Image (RGB)
-            x, y: Koordinat pixel
-
-        Returns:
-            float: Edge strength (0-255)
-        """
-        # Convert ke grayscale array
+    def calculate_chunk_variance(image, coords_chunk):
+        variances = []
         gray = image.convert('L')
         arr = np.array(gray)
-        height, width = arr.shape
-
-        # Ambil neighborhood 3x3
-        y_start = max(0, y - 1)
-        y_end = min(height, y + 2)
-        x_start = max(0, x - 1)
-        x_end = min(width, x + 2)
-
-        neighborhood = arr[y_start:y_end, x_start:x_end]
-
-        # Hitung variance sebagai ukuran edge strength
-        # Variance tinggi = edge kuat = bisa embed lebih banyak bit
-        variance = np.var(neighborhood)
-
-        return variance
+        h, w = arr.shape
+        
+        for x, y in coords_chunk:
+            y_start, y_end = max(0, y-1), min(h, y+2)
+            x_start, x_end = max(0, x-1), min(w, x+2)
+            neighborhood = arr[y_start:y_end, x_start:x_end]
+            variances.append(np.var(neighborhood))
+            
+        return np.mean(variances) if variances else 0
 
     @staticmethod
-    def adaptive_embed_bits(pixel_value, message_bits, bit_index, strength, mode='adaptive'):
-        """
-        Embed bits secara adaptive berdasarkan edge strength
+    def get_capacity(image_path, threshold=60, eps=0.2, min_samples=3, 
+                     use_isolated=False, variance_percentile=90):
+        try:
+            img = Image.open(image_path).convert('RGB')
+            success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
+                image_path, threshold, eps, min_samples, use_isolated
+            )
+            
+            if not success: return False, edge_coords
+            
+            edge_coords.sort(key=lambda p: (p[1], p[0]))
+            
+            total_pixels = len(edge_coords)
+            if total_pixels == 0:
+                 return True, {'max_chars': 0, 'edge_pixels': 0}
 
-        Args:
-            pixel_value: Nilai pixel original (0-255)
-            message_bits: String bit message
-            bit_index: Index bit saat ini
-            strength: Edge strength (variance)
-            mode: 'adaptive' atau 'standard'
+            chunk_variances = []
+            
+            num_chunks = len(edge_coords) // SteganographyEdgeAdaptive.CHUNK_SIZE
+            
+            for i in range(0, len(edge_coords), SteganographyEdgeAdaptive.CHUNK_SIZE):
+                chunk = edge_coords[i:i + SteganographyEdgeAdaptive.CHUNK_SIZE]
+                if len(chunk) < SteganographyEdgeAdaptive.CHUNK_SIZE:
+                    continue
+                    
+                v = SteganographyEdgeAdaptive.calculate_chunk_variance(img, chunk)
+                chunk_variances.append(v)
 
-        Returns:
-            tuple: (new_pixel_value, bits_embedded, new_bit_index)
-        """
-        if mode == 'standard':
-            # Standard LSB: Hanya 1 bit di LSB
-            if bit_index < len(message_bits):
-                new_value = pixel_value & ~1 | int(message_bits[bit_index])
-                return new_value, 1, bit_index + 1
-            return pixel_value, 0, bit_index
+            if not chunk_variances:
+                return False, "Tidak ada chunk valid yang terbentuk"
 
-        elif mode == 'adaptive':
-            # Adaptive: Embed 1-2 bit tergantung strength
-            # Strength tinggi (>500) = embed 2 bit
-            # Strength rendah (<500) = embed 1 bit (LSB only)
+            global_threshold = np.percentile(chunk_variances, variance_percentile)
 
-            if strength > 500:  # High variance area
-                # Embed 2 bit: LSB dan bit ke-2
-                bits_to_embed = min(2, len(message_bits) - bit_index)
-
-                if bits_to_embed == 2:
-                    # Modify 2 LSB
-                    new_value = pixel_value & ~3  # Clear 2 LSB
-                    new_value |= int(message_bits[bit_index:bit_index+2], 2)
-                    return new_value, 2, bit_index + 2
-                elif bits_to_embed == 1:
-                    # Hanya 1 bit tersisa
-                    new_value = pixel_value & ~1 | int(message_bits[bit_index])
-                    return new_value, 1, bit_index + 1
+            total_bits_capacity = 0
+            high_chunks = 0
+            low_chunks = 0
+            
+            for v in chunk_variances:
+                available_channels = (SteganographyEdgeAdaptive.CHUNK_SIZE * 3) - 1
+                
+                if v >= global_threshold:
+                    bits = available_channels * 2 
+                    high_chunks += 1
                 else:
-                    return pixel_value, 0, bit_index
-            else:  # Low variance area
-                # Embed 1 bit: LSB only (safer)
-                if bit_index < len(message_bits):
-                    new_value = pixel_value & ~1 | int(message_bits[bit_index])
-                    return new_value, 1, bit_index + 1
-                return pixel_value, 0, bit_index
+                    bits = available_channels * 1
+                    low_chunks += 1
+                
+                total_bits_capacity += bits
 
-    @staticmethod
-    def encode_message(image_path, message, output_path, threshold=50,
-                       eps=3, min_samples=5, use_adaptive=True):
-        """
-        Encode dengan adaptive embedding
-
-        Args:
-            image_path: Path gambar
-            message: Pesan
-            output_path: Path output
-            threshold: Threshold edge detection
-            eps, min_samples: DBSCAN parameters
-            use_adaptive: True = adaptive embedding, False = standard LSB
-
-        Returns:
-            tuple: (success, message)
-        """
-        try:
-            # Buka gambar
-            img = Image.open(image_path)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-
-            # Dapatkan clustered edge pixels
-            success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
-                image_path, threshold, eps, min_samples, use_noise=False
-            )
-
-            if not success:
-                return False, edge_coords
-
-            if len(edge_coords) == 0:
-                return False, "Tidak ada edge pixels yang sesuai"
-
-            # Prepare message
-            encoded_img = img.copy()
-            message += "<<END>>"
-            message_bits = ''.join([format(ord(char), '08b') for char in message])
-
-            # Encode dengan mode yang dipilih
-            mode = 'adaptive' if use_adaptive else 'standard'
-            bit_index = 0
-            total_bits_embedded = 0
-            pixels_used = 0
-
-            for x, y in edge_coords:
-                if bit_index >= len(message_bits):
-                    break
-
-                # Hitung edge strength
-                strength = SteganographyEdgeAdaptive.calculate_edge_strength(img, x, y)
-
-                pixel = list(img.getpixel((x, y)))
-
-                # Embed ke setiap channel RGB
-                for i in range(3):
-                    if bit_index >= len(message_bits):
-                        break
-
-                    new_value, bits_embedded, bit_index = SteganographyEdgeAdaptive.adaptive_embed_bits(
-                        pixel[i], message_bits, bit_index, strength, mode
-                    )
-                    pixel[i] = new_value
-                    total_bits_embedded += bits_embedded
-
-                encoded_img.putpixel((x, y), tuple(pixel))
-                pixels_used += 1
-
-            # Save
-            encoded_img.save(output_path)
-
-            method = "Adaptive (variable bit)" if use_adaptive else "Standard (1 bit LSB)"
-            return True, f"Pesan berhasil disembunyikan dengan {method}! Total {total_bits_embedded} bit di {pixels_used} pixels. Gambar: {output_path}"
-
-        except Exception as e:
-            return False, f"Error: {str(e)}"
-
-    @staticmethod
-    def decode_message(image_path, threshold=50, eps=3, min_samples=5, use_adaptive=True):
-        """
-        Decode dengan adaptive extraction
-
-        Args:
-            image_path: Path gambar
-            threshold, eps, min_samples: HARUS SAMA dengan encode
-            use_adaptive: HARUS SAMA dengan encode
-
-        Returns:
-            tuple: (success, message)
-        """
-        try:
-            # Buka gambar
-            img = Image.open(image_path)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-
-            # Dapatkan edge pixels (sama urutan dengan encode)
-            success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
-                image_path, threshold, eps, min_samples, use_noise=False
-            )
-
-            if not success:
-                return False, edge_coords
-
-            if len(edge_coords) == 0:
-                return False, "Tidak ada edge pixels"
-
-            # Decode
-            mode = 'adaptive' if use_adaptive else 'standard'
-            message_bits = []
-
-            for x, y in edge_coords:
-                # Hitung edge strength (sama dengan encode)
-                strength = SteganographyEdgeAdaptive.calculate_edge_strength(img, x, y)
-
-                pixel = img.getpixel((x, y))
-
-                for value in pixel:
-                    if mode == 'standard':
-                        # Extract 1 bit (LSB)
-                        message_bits.append(str(value & 1))
-                    elif mode == 'adaptive':
-                        if strength > 500:
-                            # Extract 2 bit
-                            message_bits.append(str((value >> 1) & 1))  # Bit ke-2
-                            message_bits.append(str(value & 1))         # LSB
-                        else:
-                            # Extract 1 bit (LSB)
-                            message_bits.append(str(value & 1))
-
-            # Convert bits ke karakter
-            message = ""
-            for i in range(0, len(message_bits), 8):
-                byte = message_bits[i:i+8]
-                if len(byte) == 8:
-                    char = chr(int(''.join(byte), 2))
-                    message += char
-
-                    if message.endswith("<<END>>"):
-                        return True, message[:-7]
-
-            return True, message if message else "Tidak ada pesan"
-
-        except Exception as e:
-            return False, f"Error: {str(e)}"
-
-    @staticmethod
-    def get_capacity(image_path, threshold=50, eps=3, min_samples=5, use_adaptive=True):
-        """
-        Estimate kapasitas dengan adaptive embedding
-
-        Adaptive embedding bisa menyimpan lebih banyak bit di area dengan variance tinggi
-        """
-        try:
-            img = Image.open(image_path)
-
-            # Dapatkan clustered pixels
-            success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
-                image_path, threshold, eps, min_samples, use_noise=False
-            )
-
-            if not success:
-                return False, edge_coords
-
-            # Estimate kapasitas
-            if use_adaptive:
-                # Hitung rata-rata strength
-                total_strength = 0
-                for x, y in edge_coords[:min(100, len(edge_coords))]:  # Sample 100 pixels
-                    strength = SteganographyEdgeAdaptive.calculate_edge_strength(img, x, y)
-                    total_strength += strength
-
-                avg_strength = total_strength / min(100, len(edge_coords))
-
-                # Estimate bits per pixel
-                if avg_strength > 500:
-                    bits_per_channel = 1.8  # Mostly 2 bit
-                else:
-                    bits_per_channel = 1.2  # Mostly 1 bit
-
-                max_bits = int(len(edge_coords) * 3 * bits_per_channel)
-            else:
-                # Standard: 3 bit per pixel
-                max_bits = len(edge_coords) * 3
-
-            max_chars = max_bits // 8 - 7
+            max_bits_data = total_bits_capacity - 32
+            max_chars = max_bits_data // 8
+            
+            w, h = img.size
+            edge_percentage = (total_pixels / (w * h)) * 100
 
             return True, {
-                'edge_pixels': len(edge_coords),
+                'edge_pixels': total_pixels,
+                'edge_percentage': f"{edge_percentage:.2f}%",
+                'max_bits_raw': total_bits_capacity,
                 'max_chars': max_chars,
-                'mode': 'Adaptive' if use_adaptive else 'Standard',
-                'estimated_bits': max_bits
+                'high_variance_chunks': high_chunks,
+                'low_variance_chunks': low_chunks,
+                'threshold_val': global_threshold,
+                'mode': 'Real Adaptive Calculation'
             }
 
         except Exception as e:
-            return False, f"Error: {str(e)}"
+            import traceback
+            traceback.print_exc()
+            return False, f"Error calculating real capacity: {str(e)}"
+
+    @staticmethod
+    def encode_message(image_path, message, output_path, threshold=30,
+                       eps=4, min_samples=3, use_isolated=False, 
+                       variance_percentile=70):
+        try:
+            img = Image.open(image_path).convert('RGB')
+            pixels = img.load()
+            
+            success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
+                image_path, threshold, eps, min_samples, use_isolated
+            )
+            if not success: return False, "Gagal deteksi edge"
+            
+            edge_coords.sort(key=lambda p: (p[1], p[0]))
+            
+            chunk_variances = []
+            for i in range(0, len(edge_coords), SteganographyEdgeAdaptive.CHUNK_SIZE):
+                chunk = edge_coords[i:i + SteganographyEdgeAdaptive.CHUNK_SIZE]
+                v = SteganographyEdgeAdaptive.calculate_chunk_variance(img, chunk)
+                chunk_variances.append(v)
+            
+            if not chunk_variances: return False, "Tidak ada edge"
+            global_threshold = np.percentile(chunk_variances, variance_percentile)
+            
+            msg_len = len(message)
+            header_bits = format(msg_len, '032b') 
+            data_bits = ''.join([format(ord(c), '08b') for c in message])
+            full_bits = header_bits + data_bits
+            
+            bit_idx = 0
+            total_bits = len(full_bits)
+            
+            for i in range(0, len(edge_coords), SteganographyEdgeAdaptive.CHUNK_SIZE):
+                if bit_idx >= total_bits: break
+                
+                chunk_coords = edge_coords[i:i + SteganographyEdgeAdaptive.CHUNK_SIZE]
+                chunk_variance = chunk_variances[i // SteganographyEdgeAdaptive.CHUNK_SIZE]
+                
+                is_high = chunk_variance >= global_threshold
+                
+                chunk_channels = []
+                for x, y in chunk_coords:
+                    chunk_channels.extend([(x, y, 0), (x, y, 1), (x, y, 2)])
+                
+                fx, fy, fc = chunk_channels[0]
+                flag_val = 1 if is_high else 0
+                
+                p_list = list(pixels[fx, fy])
+                p_list[fc] = (p_list[fc] & ~1) | flag_val
+                pixels[fx, fy] = tuple(p_list)
+                
+                for cx, cy, cc in chunk_channels[1:]:
+                    if bit_idx >= total_bits: break
+                    
+                    p_list = list(pixels[cx, cy])
+                    
+                    if is_high:
+                        bits_needed = 2
+                        bits_avail = total_bits - bit_idx
+                        to_embed = min(bits_needed, bits_avail)
+                        
+                        chunk_msg = full_bits[bit_idx : bit_idx + to_embed]
+                        val = int(chunk_msg, 2)
+                        
+                        if to_embed == 2:
+                            p_list[cc] = (p_list[cc] & ~3) | val
+                        else:
+                            p_list[cc] = (p_list[cc] & ~1) | val
+                            
+                        bit_idx += to_embed
+                    else:
+                        bit_val = int(full_bits[bit_idx])
+                        p_list[cc] = (p_list[cc] & ~1) | bit_val
+                        bit_idx += 1
+                        
+                    pixels[cx, cy] = tuple(p_list)
+            
+            if bit_idx < total_bits:
+                return False, f"Kapasitas kurang. {bit_idx}/{total_bits} bits ter-embed."
+                
+            img.save(output_path)
+            return True, f"Berhasil! Mode Adaptif Flagging. Output: {output_path}"
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+
+    @staticmethod
+    def decode_message(image_path, threshold=30, eps=4, min_samples=3, use_isolated=False, expected_length=None):
+        try:
+            img = Image.open(image_path).convert('RGB')
+            pixels = img.load()
+            
+            success, edge_coords = EdgeClustering.get_optimized_edge_pixels(
+                image_path, threshold, eps, min_samples, use_isolated
+            )
+            if not success: 
+                return False, "Gagal deteksi edge"
+            
+            edge_coords.sort(key=lambda p: (p[1], p[0]))
+            
+            decoded_bits = ""
+            
+            if expected_length is not None:
+                target_len = 32 + (expected_length * 8)
+                reading_header = False
+            else:
+                target_len = 32
+                reading_header = True
+            
+            for i in range(0, len(edge_coords), SteganographyEdgeAdaptive.CHUNK_SIZE):
+                chunk_coords = edge_coords[i:i + SteganographyEdgeAdaptive.CHUNK_SIZE]
+                
+                chunk_channels = []
+                for x, y in chunk_coords:
+                    chunk_channels.extend([(x, y, 0), (x, y, 1), (x, y, 2)])
+                
+                fx, fy, fc = chunk_channels[0]
+                flag = pixels[fx, fy][fc] & 1
+                is_high = (flag == 1)
+                
+                for cx, cy, cc in chunk_channels[1:]:
+                    if expected_length is None and not reading_header and len(decoded_bits) >= target_len:
+                        break
+                    if expected_length is not None and len(decoded_bits) >= target_len:
+                        break
+                        
+                    val = pixels[cx, cy][cc]
+                    
+                    if is_high:
+                        bits = format(val & 3, '02b')
+                        decoded_bits += bits
+                    else:
+                        bits = str(val & 1)
+                        decoded_bits += bits
+                        
+                    if expected_length is None and reading_header and len(decoded_bits) >= 32:
+                        len_bits = decoded_bits[:32]
+                        msg_len = int(len_bits, 2)
+                        
+                        decoded_bits = decoded_bits[32:]
+                        target_len = msg_len * 8
+                        reading_header = False
+                        
+                if expected_length is None and not reading_header and len(decoded_bits) >= target_len:
+                    break
+                if expected_length is not None and len(decoded_bits) >= target_len:
+                    break
+            
+            if expected_length is not None:
+                final_bits = decoded_bits[32 : 32 + (expected_length * 8)]
+            else:
+                final_bits = decoded_bits[:target_len]
+                
+            message = ""
+            for k in range(0, len(final_bits), 8):
+                byte = final_bits[k:k+8]
+                if len(byte) == 8:
+                    message += chr(int(byte, 2))
+                    
+            return True, message
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
