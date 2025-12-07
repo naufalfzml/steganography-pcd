@@ -13,7 +13,7 @@ from stegano_edge_clustered import SteganographyEdgeClustered
 from stegano_edge_adaptive import SteganographyEdgeAdaptive
 
 # Konfigurasi
-TEST_IMAGE_PATH = "images/bridge.tiff"
+TEST_IMAGE_PATH = "images/pepper.tiff" # pepper, miramar, bridge
 EDGE_THRESHOLD = 60
 ADP_EPS = 0.2
 ADP_MIN_SAMPLES = 3

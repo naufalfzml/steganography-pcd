@@ -278,9 +278,18 @@ def encode_clustered_menu():
 
     if success:
         pixel_type = "isolated" if use_isolated else "grouped"
-        percentage = result.get('edge_percentage', 0)
-        print(f"Edge pixels ({pixel_type}): {result.get('edge_pixels', 'N/A')} ({percentage:.2f}% dari total)")
-        print(f"Kapasitas maksimal: {result.get('max_chars', 'N/A')} karakter (mode: {result.get('mode', 'N/A')})")
+        
+        edge_pixels = result.get('edge_pixels', 0)
+        edge_percentage = result.get('edge_percentage', 0)
+        
+        if isinstance(edge_percentage, str) or edge_percentage is None:
+            edge_percentage = 0.0
+        
+        max_chars = result.get('max_chars', 0)
+        mode = result.get('mode', 'unknown')
+        
+        print(f"Edge pixels ({pixel_type}): {edge_pixels} ({edge_percentage:.2f}% dari total)")
+        print(f"Kapasitas maksimal: {max_chars} karakter (mode: {mode})")
     else:
         print_error(result)
         return
@@ -575,10 +584,10 @@ def display_menu():
     print("4. Sembunyikan pesan di edge gambar (Encode Edge)")
     print("5. Ekstrak pesan dari edge gambar (Decode Edge)")
     print("6. Visualisasi edge detection")
-    print("\nC. Edge-Based + DBSCAN Clustering:")
+    print("\nC. Edge-Based + DBSCAN Clustering (Adaptive):")
     print("7. Visualisasi clustering edge")
-    print("8. Encode dengan clustered edge")
-    print("9. Decode dengan clustered edge")
+    print("8. Encode dengan clustered edge adaptive")
+    print("9. Decode dengan clustered edge adaptive")
     print("\nD. Evaluasi & Perbandingan:")
     print("10. Perbandingan 3 metode (Edge, Clustered, Adaptive)")
     print("11. Pengujian Robustness (Salt & Pepper 1%)")
